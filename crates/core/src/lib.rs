@@ -1,1 +1,7 @@
 //! Lite Switcher core: config, keyboard layouts and word conversion.
+
+pub mod autostart;
+pub mod config;
+pub mod hotkey;
+pub mod layout;
+pub mod word;
