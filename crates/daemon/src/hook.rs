@@ -19,7 +19,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 use lite_switcher_core::config::Config;
-use lite_switcher_core::layout::{self, key_to_char};
+use lite_switcher_core::layout::{self, key_to_char, Layout};
 use lite_switcher_core::word::{KeyStroke, WordBuffer};
 
 use crate::inject::{self, MARKER};
@@ -34,6 +34,8 @@ pub static PAUSED: AtomicBool = AtomicBool::new(false);
 
 struct State {
     config: Config,
+    /// Layouts of the conversion cycle: resolved when the daemon starts and when the config is reloaded.
+    layouts: Vec<Layout>,
     buffer: WordBuffer,
     /// Window the buffer belongs to.
     buffer_hwnd: isize,
@@ -52,17 +54,25 @@ fn with_state<R>(f: impl FnOnce(&mut State) -> R) -> Option<R> {
     STATE.with(|s| s.try_borrow_mut().ok().and_then(|mut s| s.as_mut().map(f)))
 }
 
+/// Applies a (re)loaded config and re-reads the keyboard layouts installed in the system.
 pub fn set_config(config: Config) {
+    let layouts = layout::resolve_layouts(&layout::enumerate(), &config.common);
+    tracing::info!(
+        "layouts: {}",
+        layouts.iter().map(|l| l.id.as_str()).collect::<Vec<_>>().join(", ")
+    );
     STATE.with(|s| {
         let mut slot = s.borrow_mut();
         match slot.as_mut() {
             Some(state) => {
                 state.config = config;
+                state.layouts = layouts;
                 state.ignored_hwnd = 0;
             }
             None => {
                 *slot = Some(State {
                     config,
+                    layouts,
                     buffer: WordBuffer::default(),
                     buffer_hwnd: 0,
                     ignored_hwnd: 0,
@@ -231,10 +241,17 @@ pub fn convert_word() {
         if hwnd.0 as isize != s.buffer_hwnd || s.buffer.is_empty() {
             return None;
         }
-        let layouts = layout::resolve_layouts(&layout::enumerate(), &s.config.common);
         let origin = layout::describe(inject::window_hkl(hwnd)).id;
+        let layouts = &s.layouts;
         let replacement = s.buffer.next_replacement(
-            || layout::cycle_sequence(&layouts, Some(&origin)),
+            || {
+                let seq = layout::cycle_sequence(layouts, Some(&origin));
+                tracing::debug!(
+                    "new cycle: current layout {origin}, order {}",
+                    seq.iter().map(|l| l.id.as_str()).collect::<Vec<_>>().join(" > ")
+                );
+                seq
+            },
             |k, l| key_to_char(l.hkl, k.scancode, k.shift, k.caps),
         )?;
         Some((replacement, s.config.clone()))

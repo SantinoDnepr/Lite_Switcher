@@ -86,12 +86,15 @@ pub fn resolve_layouts(system: &[Layout], common: &Common) -> Vec<Layout> {
     }
 }
 
-/// Conversion cycle for a word typed in `origin`: all other layouts in order, then the origin itself.
+/// Conversion cycle for a word typed in the layout `origin_id`: the layouts that follow it in the
+/// list, then the ones before it, and finally the origin itself (the cycle closes back to it).
+/// If the origin is unknown the list is used as is.
 pub fn cycle_sequence(layouts: &[Layout], origin_id: Option<&str>) -> Vec<Layout> {
-    let is_origin = |l: &Layout| origin_id.is_some_and(|o| o.eq_ignore_ascii_case(&l.id));
-    let mut seq: Vec<Layout> = layouts.iter().filter(|l| !is_origin(l)).cloned().collect();
-    seq.extend(layouts.iter().filter(|l| is_origin(l)).cloned());
-    seq
+    let pos = origin_id.and_then(|o| layouts.iter().position(|l| l.id.eq_ignore_ascii_case(o)));
+    match pos {
+        Some(i) => layouts[i + 1..].iter().chain(&layouts[..=i]).cloned().collect(),
+        None => layouts.to_vec(),
+    }
 }
 
 /// The character produced by a physical key (scancode) in the given layout, if it is a printable one.
@@ -193,11 +196,13 @@ mod tests {
     }
 
     #[test]
-    fn cycle_puts_origin_last() {
+    fn cycle_starts_after_origin_and_ends_with_it() {
         let all = vec![l("en-US", 1), l("ru-RU", 2), l("uk-UA", 3)];
         let ids = |v: &[Layout]| v.iter().map(|l| l.id.clone()).collect::<Vec<_>>();
-        assert_eq!(ids(&cycle_sequence(&all, Some("ru-RU"))), ["en-US", "uk-UA", "ru-RU"]);
         assert_eq!(ids(&cycle_sequence(&all, Some("en-US"))), ["ru-RU", "uk-UA", "en-US"]);
+        assert_eq!(ids(&cycle_sequence(&all, Some("ru-RU"))), ["uk-UA", "en-US", "ru-RU"]);
+        assert_eq!(ids(&cycle_sequence(&all, Some("UK-ua"))), ["en-US", "ru-RU", "uk-UA"]);
         assert_eq!(ids(&cycle_sequence(&all, None)), ["en-US", "ru-RU", "uk-UA"]);
+        assert_eq!(ids(&cycle_sequence(&all, Some("de-DE"))), ["en-US", "ru-RU", "uk-UA"]);
     }
 }

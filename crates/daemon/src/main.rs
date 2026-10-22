@@ -54,9 +54,14 @@ fn config_mtime() -> Option<SystemTime> {
 }
 
 fn main() {
-    // Single instance.
+    // Single instance. LITE_SWITCHER_TEST_INSTANCE lets a test copy run next to the real daemon.
+    let name = if std::env::var_os("LITE_SWITCHER_TEST_INSTANCE").is_some() {
+        w!("Local\\LiteSwitcher.Daemon.Test")
+    } else {
+        w!("Local\\LiteSwitcher.Daemon")
+    };
     let _mutex = unsafe {
-        let handle = CreateMutexW(None, true, w!("Local\\LiteSwitcher.Daemon"));
+        let handle = CreateMutexW(None, true, name);
         if handle.is_err() || GetLastError() == ERROR_ALREADY_EXISTS {
             return;
         }

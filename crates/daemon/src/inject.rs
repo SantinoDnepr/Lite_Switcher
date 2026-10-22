@@ -16,7 +16,8 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
     VK_MENU, VK_RWIN, VK_SHIFT,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetForegroundWindow, GetWindowThreadProcessId, PostMessageW, WM_INPUTLANGCHANGEREQUEST,
+    GetForegroundWindow, GetGUIThreadInfo, GetWindowThreadProcessId, PostMessageW, GUITHREADINFO,
+    WM_INPUTLANGCHANGEREQUEST,
 };
 
 use lite_switcher_core::hotkey::Hotkey;
@@ -32,10 +33,24 @@ pub fn foreground() -> HWND {
     unsafe { GetForegroundWindow() }
 }
 
-/// HKL (raw) active in the given window's input thread.
-pub fn window_hkl(hwnd: HWND) -> isize {
+/// The window that really receives the keyboard input: the focused window of the foreground
+/// window's thread (it may belong to another thread than the top-level window), or `hwnd` itself.
+pub fn focus_window(hwnd: HWND) -> HWND {
     unsafe {
         let tid = GetWindowThreadProcessId(hwnd, None);
+        let mut info = GUITHREADINFO { cbSize: size_of::<GUITHREADINFO>() as u32, ..Default::default() };
+        if GetGUIThreadInfo(tid, &mut info).is_ok() && !info.hwndFocus.0.is_null() {
+            info.hwndFocus
+        } else {
+            hwnd
+        }
+    }
+}
+
+/// HKL (raw) active in the input thread of the window that has the keyboard focus.
+pub fn window_hkl(hwnd: HWND) -> isize {
+    unsafe {
+        let tid = GetWindowThreadProcessId(focus_window(hwnd), None);
         GetKeyboardLayout(tid).0 as isize
     }
 }
@@ -120,10 +135,14 @@ pub fn send_text(text: &str, delay_ms: u32) {
     send_groups(groups, delay_ms);
 }
 
-/// Asks the window to switch its input language.
+/// Asks the window (and its focused child, if that is another window) to switch its input language.
 pub fn switch_layout(hwnd: HWND, hkl: isize) {
     unsafe {
         let _ = PostMessageW(Some(hwnd), WM_INPUTLANGCHANGEREQUEST, WPARAM(0), LPARAM(hkl));
+        let focus = focus_window(hwnd);
+        if focus != hwnd {
+            let _ = PostMessageW(Some(focus), WM_INPUTLANGCHANGEREQUEST, WPARAM(0), LPARAM(hkl));
+        }
     }
 }
 

@@ -140,14 +140,15 @@ mod tests {
         typed(&mut buf, 3); // typed in ru: shown as "byb"
         let all = layouts();
         let seq = || cycle_sequence(&all, Some("ru-RU"));
+        // list is en, ru, uk: from ru the next one is uk, then en, then back to ru
         let r1 = buf.next_replacement(seq, render).unwrap();
-        assert_eq!((r1.target.id.as_str(), r1.text.as_str(), r1.backspaces), ("en-US", "axa", 3));
+        assert_eq!((r1.target.id.as_str(), r1.text.as_str(), r1.backspaces), ("uk-UA", "czc", 3));
         let r2 = buf.next_replacement(|| unreachable!(), render).unwrap();
-        assert_eq!((r2.target.id.as_str(), r2.text.as_str(), r2.backspaces), ("uk-UA", "czc", 3));
+        assert_eq!((r2.target.id.as_str(), r2.text.as_str(), r2.backspaces), ("en-US", "axa", 3));
         let r3 = buf.next_replacement(|| unreachable!(), render).unwrap();
         assert_eq!(r3.target.id, "ru-RU");
         let r4 = buf.next_replacement(|| unreachable!(), render).unwrap();
-        assert_eq!(r4.target.id, "en-US");
+        assert_eq!(r4.target.id, "uk-UA");
     }
 
     #[test]
@@ -171,7 +172,8 @@ mod tests {
         buf.push(key(1));
         let r = buf.next_replacement(|| cycle_sequence(&all, Some("ru-RU")), render).unwrap();
         assert_eq!(r.backspaces, 3);
-        assert_eq!(r.target.id, "en-US");
+        // the word is now shown in ru, so the next layout after ru in the list is uk
+        assert_eq!(r.target.id, "uk-UA");
     }
 
     #[test]
