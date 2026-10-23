@@ -12,8 +12,8 @@ use windows::Win32::System::Threading::{
 };
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     GetAsyncKeyState, GetKeyboardLayout, SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT,
-    KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP, KEYEVENTF_UNICODE, VIRTUAL_KEY, VK_BACK, VK_CONTROL, VK_LWIN,
-    VK_MENU, VK_RWIN, VK_SHIFT,
+    KEYBD_EVENT_FLAGS, KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP, KEYEVENTF_UNICODE, VIRTUAL_KEY, VK_BACK,
+    VK_CONTROL, VK_LEFT, VK_LWIN, VK_MENU, VK_RWIN, VK_SHIFT,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     GetForegroundWindow, GetGUIThreadInfo, GetWindowThreadProcessId, PostMessageW, GUITHREADINFO,
@@ -24,6 +24,9 @@ use lite_switcher_core::hotkey::Hotkey;
 
 /// Marks the events sent by this program so the keyboard hook ignores them.
 pub const MARKER: usize = 0x4C53_5754;
+
+/// An unassigned virtual key, used to cancel the Alt / Win menu activation.
+const VK_UNASSIGNED: VIRTUAL_KEY = VIRTUAL_KEY(0xE8);
 
 pub fn is_down(vk: VIRTUAL_KEY) -> bool {
     unsafe { GetAsyncKeyState(vk.0 as i32) as u16 & 0x8000 != 0 }
@@ -100,18 +103,56 @@ fn send_groups(groups: Vec<Vec<INPUT>>, delay_ms: u32) {
 
 /// Releases the modifiers of the hotkey that are still held, so that e.g. Ctrl+Backspace is not sent.
 pub fn release_hotkey_modifiers(hk: &Hotkey) {
-    let mut inputs = Vec::new();
+    let mut ups = Vec::new();
     for (wanted, vk) in [(hk.ctrl, VK_CONTROL), (hk.alt, VK_MENU), (hk.shift, VK_SHIFT), (hk.win, VK_LWIN)] {
         if wanted && is_down(vk) {
-            inputs.push(key_input(vk, 0, KEYEVENTF_KEYUP));
+            ups.push(key_input(vk, 0, KEYEVENTF_KEYUP));
         }
     }
     if hk.win && is_down(VK_RWIN) {
-        inputs.push(key_input(VK_RWIN, 0, KEYEVENTF_KEYUP));
+        ups.push(key_input(VK_RWIN, 0, KEYEVENTF_KEYUP));
     }
-    if !inputs.is_empty() {
-        send(&inputs);
+    if ups.is_empty() {
+        return;
     }
+    let mut inputs = Vec::new();
+    if hk.alt || hk.win {
+        inputs.extend(menu_mask());
+    }
+    inputs.extend(ups);
+    send(&inputs);
+}
+
+/// A lone Alt / Win press and release opens the menu bar / Start menu. An unassigned key tapped
+/// while the modifier is still held cancels that.
+fn menu_mask() -> [INPUT; 2] {
+    [key_input(VK_UNASSIGNED, 0, KEYBD_EVENT_FLAGS(0)), key_input(VK_UNASSIGNED, 0, KEYEVENTF_KEYUP)]
+}
+
+/// Called when a hotkey with Alt or Win is swallowed: the application has already seen the modifier go down.
+pub fn mask_menu_activation() {
+    send(&menu_mask());
+}
+
+/// Presses `modifier` + `key` (e.g. Ctrl+C).
+pub fn send_chord(modifier: VIRTUAL_KEY, key: VIRTUAL_KEY) {
+    send(&[
+        key_input(modifier, 0, KEYBD_EVENT_FLAGS(0)),
+        key_input(key, 0, KEYBD_EVENT_FLAGS(0)),
+        key_input(key, 0, KEYEVENTF_KEYUP),
+        key_input(modifier, 0, KEYEVENTF_KEYUP),
+    ]);
+}
+
+/// Selects `count` characters to the left of the caret (Shift+Left repeated).
+pub fn select_left(count: usize) {
+    let mut inputs = vec![key_input(VK_SHIFT, 0, KEYBD_EVENT_FLAGS(0))];
+    for _ in 0..count {
+        inputs.push(key_input(VK_LEFT, 0, KEYEVENTF_EXTENDEDKEY));
+        inputs.push(key_input(VK_LEFT, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP));
+    }
+    inputs.push(key_input(VK_SHIFT, 0, KEYEVENTF_KEYUP));
+    send(&inputs);
 }
 
 pub fn send_backspaces(count: usize, delay_ms: u32) {

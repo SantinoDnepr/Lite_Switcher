@@ -16,11 +16,30 @@ pub struct Common {
     pub autostart: bool,
     pub show_tray_icon: bool,
     pub keep_trailing_space: bool,
+    /// Automatic layout switching. Not implemented yet: the flag is only stored.
+    pub autoswitch: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Hotkeys {
+    /// Convert the last typed word.
     pub convert_word: Hotkey,
+    /// Convert the selected text to the next layout. `None` = no hotkey.
+    pub convert_selection: Option<Hotkey>,
+    /// Invert the case of the selected text. `None` = no hotkey.
+    pub invert_case: Option<Hotkey>,
+    /// Turn the automatic switching on / off. `None` = no hotkey.
+    pub toggle_autoswitch: Option<Hotkey>,
+}
+
+impl Hotkeys {
+    pub fn default_convert_selection() -> Hotkey {
+        Hotkey { shift: true, ..Hotkey::default() }
+    }
+
+    pub fn default_invert_case() -> Hotkey {
+        Hotkey { alt: true, ..Hotkey::default() }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -56,8 +75,14 @@ impl Default for Config {
                 autostart: false,
                 show_tray_icon: true,
                 keep_trailing_space: true,
+                autoswitch: false,
             },
-            hotkeys: Hotkeys { convert_word: Hotkey::default() },
+            hotkeys: Hotkeys {
+                convert_word: Hotkey::default(),
+                convert_selection: Some(Hotkeys::default_convert_selection()),
+                invert_case: Some(Hotkeys::default_invert_case()),
+                toggle_autoswitch: None,
+            },
             troubleshooting: Troubleshooting {
                 log_enabled: false,
                 log_level: "info".into(),
@@ -79,6 +104,20 @@ fn parse_bool(s: &str) -> Option<bool> {
 
 fn parse_list(s: &str) -> Vec<String> {
     s.split(',').map(str::trim).filter(|x| !x.is_empty()).map(String::from).collect()
+}
+
+/// Empty value = no hotkey; an invalid value keeps the default.
+fn parse_opt_hotkey(value: &str, default: Option<Hotkey>) -> Option<Hotkey> {
+    let value = value.trim();
+    if value.is_empty() {
+        None
+    } else {
+        value.parse().ok().map_or(default, Some)
+    }
+}
+
+fn opt_hotkey_string(hotkey: &Option<Hotkey>) -> String {
+    hotkey.map(|h| h.to_string()).unwrap_or_default()
 }
 
 fn join(list: &[String]) -> String {
@@ -120,8 +159,20 @@ impl Config {
         if let Some(v) = get("common", "keep_trailing_space").and_then(parse_bool) {
             cfg.common.keep_trailing_space = v;
         }
+        if let Some(v) = get("common", "autoswitch").and_then(parse_bool) {
+            cfg.common.autoswitch = v;
+        }
         if let Some(v) = get("hotkeys", "convert_word").and_then(|v| v.parse().ok()) {
             cfg.hotkeys.convert_word = v;
+        }
+        if let Some(v) = get("hotkeys", "convert_selection") {
+            cfg.hotkeys.convert_selection = parse_opt_hotkey(v, cfg.hotkeys.convert_selection);
+        }
+        if let Some(v) = get("hotkeys", "invert_case") {
+            cfg.hotkeys.invert_case = parse_opt_hotkey(v, cfg.hotkeys.invert_case);
+        }
+        if let Some(v) = get("hotkeys", "toggle_autoswitch") {
+            cfg.hotkeys.toggle_autoswitch = parse_opt_hotkey(v, cfg.hotkeys.toggle_autoswitch);
         }
         if let Some(v) = get("troubleshooting", "log_enabled").and_then(parse_bool) {
             cfg.troubleshooting.log_enabled = v;
@@ -161,10 +212,19 @@ autostart = {autostart}
 show_tray_icon = {tray}
 ; keep spaces typed after the word when converting
 keep_trailing_space = {space}
+; automatic layout switching (not implemented yet, the flag is only stored)
+autoswitch = {autoswitch}
 
 [hotkeys]
 ; convert the last typed word to the next layout (e.g. Pause, Ctrl+Pause, Shift+F9)
+; Pause and Break are the same key
 convert_word = {hotkey}
+; convert the selected text to the next layout (empty = no hotkey)
+convert_selection = {hk_selection}
+; invert the case of the selected text (empty = no hotkey)
+invert_case = {hk_case}
+; turn the automatic switching on / off (empty = no hotkey)
+toggle_autoswitch = {hk_toggle}
 
 [troubleshooting]
 log_enabled = {log}
@@ -184,7 +244,11 @@ on_convert = {wav}
             autostart = c.autostart,
             tray = c.show_tray_icon,
             space = c.keep_trailing_space,
+            autoswitch = c.autoswitch,
             hotkey = self.hotkeys.convert_word,
+            hk_selection = opt_hotkey_string(&self.hotkeys.convert_selection),
+            hk_case = opt_hotkey_string(&self.hotkeys.invert_case),
+            hk_toggle = opt_hotkey_string(&self.hotkeys.toggle_autoswitch),
             log = t.log_enabled,
             level = t.log_level,
             ignored = join(&t.ignored_apps),
@@ -235,7 +299,11 @@ mod tests {
         cfg.common.layouts = vec!["en-US".into(), "ru-RU".into(), "uk-UA".into()];
         cfg.common.exclude_layouts = vec!["de-DE".into()];
         cfg.common.autostart = true;
+        cfg.common.autoswitch = true;
         cfg.hotkeys.convert_word = "Ctrl+F9".parse().unwrap();
+        cfg.hotkeys.convert_selection = None;
+        cfg.hotkeys.invert_case = Some("Alt+F8".parse().unwrap());
+        cfg.hotkeys.toggle_autoswitch = Some("Ctrl+Shift+A".parse().unwrap());
         cfg.troubleshooting.ignored_apps = vec!["game.exe".into(), "x.exe".into()];
         cfg.troubleshooting.key_delay_ms = 5;
         cfg.sounds.enabled = true;
@@ -247,5 +315,21 @@ mod tests {
     fn missing_and_invalid_keys_use_defaults() {
         let cfg = Config::parse("[common]\nautostart = maybe\n[hotkeys]\nconvert_word = Nope\n").unwrap();
         assert_eq!(cfg, Config::default());
+    }
+
+    #[test]
+    fn new_hotkeys_defaults() {
+        let cfg = Config::default();
+        assert_eq!(cfg.hotkeys.convert_selection.unwrap().to_string(), "Shift+Pause");
+        assert_eq!(cfg.hotkeys.invert_case.unwrap().to_string(), "Alt+Pause");
+        assert_eq!(cfg.hotkeys.toggle_autoswitch, None);
+        assert!(!cfg.common.autoswitch);
+        // an empty value removes the hotkey, garbage keeps the default
+        let cfg = Config::parse("[hotkeys]
+convert_selection =
+invert_case = Nope
+").unwrap();
+        assert_eq!(cfg.hotkeys.convert_selection, None);
+        assert_eq!(cfg.hotkeys.invert_case, Some(Hotkeys::default_invert_case()));
     }
 }

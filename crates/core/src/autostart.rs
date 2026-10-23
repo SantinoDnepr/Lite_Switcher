@@ -29,10 +29,11 @@ pub fn set(enabled: bool, exe: &Path) -> Result<(), String> {
         let key = CURRENT_USER.create(RUN_KEY).map_err(|e| e.to_string())?;
         key.set_string(VALUE_NAME, quoted(exe)).map_err(|e| e.to_string())
     } else {
-        match CURRENT_USER.open(RUN_KEY) {
-            Ok(key) if key.get_string(VALUE_NAME).is_ok() => {
-                key.remove_value(VALUE_NAME).map_err(|e| e.to_string())
-            }
+        // Only the entry of this very executable is removed: another copy (or an older install
+        // in a different folder) may own the entry.
+        let Ok(key) = CURRENT_USER.create(RUN_KEY) else { return Ok(()) };
+        match key.get_string(VALUE_NAME) {
+            Ok(value) if value == quoted(exe) => key.remove_value(VALUE_NAME).map_err(|e| e.to_string()),
             _ => Ok(()),
         }
     }

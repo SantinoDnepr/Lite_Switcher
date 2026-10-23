@@ -1,7 +1,9 @@
 #![windows_subsystem = "windows"]
 
+mod clip;
 mod hook;
 mod inject;
+mod selection;
 mod tray;
 
 use std::fs::{self, File, OpenOptions};
@@ -81,7 +83,7 @@ fn main() {
             return;
         }
     };
-    let tray = match tray::Tray::new() {
+    let tray = match tray::Tray::new(config.common.autoswitch) {
         Ok(t) => Some(t),
         Err(e) => {
             tracing::warn!("tray icon: {e}");
@@ -98,11 +100,13 @@ fn main() {
     let mut msg = MSG::default();
     unsafe {
         while GetMessageW(&mut msg, None, 0, 0).as_bool() {
-            if msg.message == hook::WM_CONVERT {
-                hook::convert_word();
-            } else if msg.message == hook::WM_TRAY_REFRESH {
-                if let Some(t) = &tray {
-                    t.refresh();
+            if msg.message == hook::WM_ACTION {
+                if let Some(action) = hook::Action::from_wparam(msg.wParam.0) {
+                    if hook::handle_action(action) {
+                        if let Some(t) = &tray {
+                            t.refresh(hook::autoswitch_enabled());
+                        }
+                    }
                 }
             } else if msg.message == WM_TIMER && msg.hwnd.0.is_null() && msg.wParam.0 == timer {
                 let mtime = config_mtime();
@@ -114,6 +118,7 @@ fn main() {
                             sync_autostart(&cfg);
                             if let Some(t) = &tray {
                                 t.set_visible(cfg.common.show_tray_icon);
+                                t.refresh(cfg.common.autoswitch);
                             }
                             hook::set_config(cfg);
                         }

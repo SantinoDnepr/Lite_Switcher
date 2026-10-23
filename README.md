@@ -7,6 +7,18 @@ type `цщкв` with the Russian layout, press Pause - it becomes `word`; press 
 variant of the same keys, and so on, back to the original. The layouts are taken from the system
 (`GetKeyboardLayoutList`), so any layout installed in Windows works without code changes.
 
+## Hotkeys (configurable)
+
+| Hotkey | Action |
+|---|---|
+| `Pause` (`Break`) | convert the last typed word to the next layout; press again to continue the cycle |
+| `Shift+Pause` | convert the selected text to the next layout (the result stays selected) |
+| `Alt+Pause` | invert the case of the selected text |
+| *(not assigned)* | turn the automatic switching on / off |
+
+The tray menu has the "Автоперемикання" check box (automatic switching - not implemented yet) and
+the items "Settings..." and "Exit".
+
 ## Programs
 
 | Binary | Crate | Purpose |
@@ -34,7 +46,7 @@ about once a second after it changes; only `log_enabled` needs a restart.
 
 The daemon records the *physical keys* (scancodes) of the current word via a low-level keyboard hook.
 On the hotkey it erases the word with Backspace, switches the layout of the active window and types
-the same keys rendered in the target layout as Unicode (no clipboard involved). The text typed is
+the same keys rendered in the target layout as Unicode (the word conversion does not use the clipboard). The text typed is
 never logged.
 
 ## Limitations
@@ -42,6 +54,8 @@ never logged.
 - Windows does not let a normal process see keys typed in windows running as administrator
   (UIPI) - run the daemon elevated if you need that.
 - Do not run it together with Punto Switcher while both use the same hotkey.
+- The selection actions copy and paste through the clipboard (Ctrl+C / Ctrl+V); the clipboard is
+  restored, but applications that read it slowly may paste late.
 - Punctuation keys that are letters in another layout (`,` -> `б`) are part of the word.
 - If the tray icon is hidden (`show_tray_icon = false`), stop the daemon from Task Manager.
 

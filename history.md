@@ -2,6 +2,36 @@
 
 Versions and changes, newest first. Every change to the project is recorded here.
 
+## 0.2.0 - 2026-10-23
+
+### Added
+- Tray menu item "Автоперемикання" with a check mark. The automatic switching itself is a stub for
+  now: the flag is stored in `config.ini` (`[common] autoswitch`, default `false`) and shown on the
+  "Common" tab of the settings. The flag and the menu stay in sync with the file in both directions.
+- Hotkey `Shift+Break` (`convert_selection`): converts the selected text to the next layout of the
+  list. The layout the text was typed in is detected from the text itself (the layout that can type
+  most of its letters, the current layout wins a tie); the result stays selected, so pressing the
+  hotkey again continues the cycle.
+- Hotkey `Alt+Break` (`invert_case`): inverts the case of the selected text.
+- Hotkey `toggle_autoswitch`: turns the automatic switching on / off. No key is assigned by default;
+  set it in the settings or in `[hotkeys]`.
+- The hotkeys of the selection actions can be cleared (empty value in `config.ini`) and are edited on
+  the "Hotkeys" tab; the settings refuse to save two actions with the same hotkey.
+- The selected text is read with Ctrl+C and replaced with Ctrl+V; the previous clipboard content
+  (all byte-copyable formats) is restored afterwards. It runs in a background thread, so the
+  keyboard hook never waits for the application.
+- Alt / Win based hotkeys no longer open the menu bar / Start menu of the application.
+
+### Changed
+- The "Pause" item is removed from the tray menu: layouts are switched either automatically (to be
+  done) or manually by the hotkeys. To stop the program use "Exit".
+- The icon no longer changes colour (it showed the removed pause state).
+- `Pause` and `Break` are the same key; the config accepts both names and writes `Pause`.
+
+### Fixed
+- Turning autostart off removed the autostart entry of any copy of the program; now only the entry
+  that points to the running executable is removed (and the registry key is opened for writing).
+
 ## 0.1.1 - 2026-10-22
 
 ### Fixed

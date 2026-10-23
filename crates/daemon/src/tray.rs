@@ -2,18 +2,16 @@
 
 use std::path::PathBuf;
 use std::process::Command;
-use std::sync::atomic::Ordering;
 
 use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
-use windows::Win32::UI::WindowsAndMessaging::WM_QUIT;
 
-use crate::hook::{post_to_main, PAUSED, WM_TRAY_REFRESH};
+use crate::hook::{post_action, post_quit, Action};
 
-/// A round icon with the letter "L"; gray while paused.
-fn make_icon(active: bool) -> Icon {
+/// A round icon with the letter "L".
+fn make_icon() -> Icon {
     const N: u32 = 32;
-    let (r, g, b) = if active { (45, 127, 249) } else { (130, 130, 130) };
+    let (r, g, b) = (45, 127, 249);
     let mut rgba = Vec::with_capacity((N * N * 4) as usize);
     for y in 0..N {
         for x in 0..N {
@@ -39,51 +37,48 @@ fn settings_exe() -> Option<PathBuf> {
 
 pub struct Tray {
     icon: TrayIcon,
-    pause: CheckMenuItem,
+    autoswitch: CheckMenuItem,
 }
 
 impl Tray {
-    pub fn new() -> Result<Tray, Box<dyn std::error::Error>> {
+    pub fn new(autoswitch_on: bool) -> Result<Tray, Box<dyn std::error::Error>> {
+        let autoswitch = CheckMenuItem::new("Автоперемикання", true, autoswitch_on, None);
         let settings = MenuItem::new("Settings...", true, None);
-        let pause = CheckMenuItem::new("Pause", true, false, None);
         let exit = MenuItem::new("Exit", true, None);
         let menu = Menu::new();
-        menu.append_items(&[&settings, &pause, &PredefinedMenuItem::separator(), &exit])?;
+        menu.append_items(&[&autoswitch, &settings, &PredefinedMenuItem::separator(), &exit])?;
 
         let icon = TrayIconBuilder::new()
             .with_menu(Box::new(menu))
             .with_tooltip("Lite Switcher")
-            .with_icon(make_icon(true))
+            .with_icon(make_icon())
             .build()?;
 
         // The handler must be Send + Sync, so it only touches ids and posts messages to the main thread.
-        let (settings_id, pause_id, exit_id) = (settings.id().clone(), pause.id().clone(), exit.id().clone());
+        let (autoswitch_id, settings_id, exit_id) =
+            (autoswitch.id().clone(), settings.id().clone(), exit.id().clone());
         MenuEvent::set_event_handler(Some(move |event: MenuEvent| {
-            if event.id == settings_id {
+            if event.id == autoswitch_id {
+                post_action(Action::ToggleAutoswitch);
+            } else if event.id == settings_id {
                 if let Some(path) = settings_exe() {
                     if let Err(e) = Command::new(&path).spawn() {
                         tracing::warn!("cannot start {}: {e}", path.display());
                     }
                 }
-            } else if event.id == pause_id {
-                PAUSED.fetch_xor(true, Ordering::Relaxed);
-                post_to_main(WM_TRAY_REFRESH);
             } else if event.id == exit_id {
-                post_to_main(WM_QUIT);
+                post_quit();
             }
         }));
-        Ok(Tray { icon, pause })
+        Ok(Tray { icon, autoswitch })
     }
 
     pub fn set_visible(&self, visible: bool) {
         let _ = self.icon.set_visible(visible);
     }
 
-    /// Syncs the icon and the menu check mark with the pause state.
-    pub fn refresh(&self) {
-        let paused = PAUSED.load(Ordering::Relaxed);
-        self.pause.set_checked(paused);
-        let _ = self.icon.set_icon(Some(make_icon(!paused)));
-        tracing::info!("paused = {paused}");
+    /// Syncs the check mark of the menu item with the autoswitch setting.
+    pub fn refresh(&self, autoswitch_on: bool) {
+        self.autoswitch.set_checked(autoswitch_on);
     }
 }

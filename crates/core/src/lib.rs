@@ -4,4 +4,5 @@ pub mod autostart;
 pub mod config;
 pub mod hotkey;
 pub mod layout;
+pub mod text;
 pub mod word;

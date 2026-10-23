@@ -9,7 +9,7 @@ use windows::Win32::Foundation::{GetLastError, ERROR_ALREADY_EXISTS};
 use windows::Win32::System::Threading::CreateMutexW;
 use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_CONTROL, VK_LWIN, VK_MENU, VK_RWIN, VK_SHIFT};
 
-use lite_switcher_core::config::Config;
+use lite_switcher_core::config::{Config, Hotkeys};
 use lite_switcher_core::hotkey::{vk_name, Hotkey};
 use lite_switcher_core::{autostart, layout};
 
@@ -19,6 +19,47 @@ enum Tab {
     Hotkeys,
     Troubleshooting,
     Sounds,
+}
+
+/// The hotkeys that can be edited.
+#[derive(Clone, Copy, PartialEq)]
+enum HotkeyField {
+    ConvertWord,
+    ConvertSelection,
+    InvertCase,
+    ToggleAutoswitch,
+}
+
+impl HotkeyField {
+    const ALL: [HotkeyField; 4] = [
+        HotkeyField::ConvertWord,
+        HotkeyField::ConvertSelection,
+        HotkeyField::InvertCase,
+        HotkeyField::ToggleAutoswitch,
+    ];
+
+    fn label(self) -> &'static str {
+        match self {
+            HotkeyField::ConvertWord => "Convert the last word",
+            HotkeyField::ConvertSelection => "Convert the selected text",
+            HotkeyField::InvertCase => "Invert the case of the selected text",
+            HotkeyField::ToggleAutoswitch => "Turn the autoswitch on / off",
+        }
+    }
+
+    fn default_hotkey(self) -> Option<Hotkey> {
+        match self {
+            HotkeyField::ConvertWord => Some(Hotkey::default()),
+            HotkeyField::ConvertSelection => Some(Hotkeys::default_convert_selection()),
+            HotkeyField::InvertCase => Some(Hotkeys::default_invert_case()),
+            HotkeyField::ToggleAutoswitch => None,
+        }
+    }
+
+    /// The last word hotkey cannot be empty.
+    fn optional(self) -> bool {
+        self != HotkeyField::ConvertWord
+    }
 }
 
 struct LayoutRow {
@@ -34,7 +75,7 @@ struct App {
     auto_layouts: bool,
     rows: Vec<LayoutRow>,
     ignored_text: String,
-    capturing: bool,
+    capturing: Option<HotkeyField>,
     status: String,
 }
 
@@ -58,7 +99,7 @@ impl App {
             auto_layouts: true,
             rows: Vec::new(),
             ignored_text: String::new(),
-            capturing: false,
+            capturing: None,
             status,
         };
         app.load_form();
@@ -120,8 +161,38 @@ impl App {
             .collect();
     }
 
+    fn hotkey(&self, field: HotkeyField) -> Option<Hotkey> {
+        let h = &self.cfg.hotkeys;
+        match field {
+            HotkeyField::ConvertWord => Some(h.convert_word),
+            HotkeyField::ConvertSelection => h.convert_selection,
+            HotkeyField::InvertCase => h.invert_case,
+            HotkeyField::ToggleAutoswitch => h.toggle_autoswitch,
+        }
+    }
+
+    fn set_hotkey(&mut self, field: HotkeyField, hotkey: Option<Hotkey>) {
+        let h = &mut self.cfg.hotkeys;
+        match field {
+            HotkeyField::ConvertWord => h.convert_word = hotkey.unwrap_or_default(),
+            HotkeyField::ConvertSelection => h.convert_selection = hotkey,
+            HotkeyField::InvertCase => h.invert_case = hotkey,
+            HotkeyField::ToggleAutoswitch => h.toggle_autoswitch = hotkey,
+        }
+    }
+
+    /// Two actions must not share a hotkey.
+    fn duplicate_hotkey(&self) -> Option<Hotkey> {
+        let all: Vec<Hotkey> = HotkeyField::ALL.iter().filter_map(|f| self.hotkey(*f)).collect();
+        all.iter().enumerate().find(|(i, h)| all[..*i].contains(h)).map(|(_, h)| *h)
+    }
+
     fn save(&mut self) {
         self.store_form();
+        if let Some(hotkey) = self.duplicate_hotkey() {
+            self.status = format!("The hotkey {hotkey} is assigned to more than one action.");
+            return;
+        }
         if !self.auto_layouts && self.cfg.common.layouts.is_empty() {
             self.status = "Select at least one layout (or enable \"All system layouts\").".into();
             return;
@@ -162,14 +233,18 @@ impl App {
                 continue; // modifiers
             }
             if vk_name(vk).is_some() && is_down(vk) {
-                self.cfg.hotkeys.convert_word = Hotkey {
-                    ctrl: is_down(VK_CONTROL.0 as u32),
-                    alt: is_down(VK_MENU.0 as u32),
-                    shift: is_down(VK_SHIFT.0 as u32),
-                    win: is_down(VK_LWIN.0 as u32) || is_down(VK_RWIN.0 as u32),
-                    vk,
-                };
-                self.capturing = false;
+                if let Some(field) = self.capturing.take() {
+                    self.set_hotkey(
+                        field,
+                        Some(Hotkey {
+                            ctrl: is_down(VK_CONTROL.0 as u32),
+                            alt: is_down(VK_MENU.0 as u32),
+                            shift: is_down(VK_SHIFT.0 as u32),
+                            win: is_down(VK_LWIN.0 as u32) || is_down(VK_RWIN.0 as u32),
+                            vk,
+                        }),
+                    );
+                }
                 return;
             }
         }
@@ -209,6 +284,8 @@ impl App {
         }
         ui.separator();
         ui.heading("General");
+        ui.checkbox(&mut self.cfg.common.autoswitch, "Автоперемикання");
+        ui.label("Automatic layout switching is not implemented yet: the flag is only stored.");
         ui.checkbox(&mut self.cfg.common.autostart, "Start with Windows");
         ui.checkbox(&mut self.cfg.common.show_tray_icon, "Show the tray icon");
         ui.checkbox(&mut self.cfg.common.keep_trailing_space, "Keep spaces typed after the word when converting");
@@ -216,24 +293,33 @@ impl App {
 
     fn hotkeys_tab(&mut self, ui: &mut egui::Ui) {
         ui.heading("Hotkeys");
-        ui.horizontal(|ui| {
-            ui.label("Convert the last word:");
-            if self.capturing {
-                ui.strong("press the new hotkey...");
-                if ui.button("Cancel").clicked() {
-                    self.capturing = false;
+        for field in HotkeyField::ALL {
+            ui.horizontal(|ui| {
+                ui.label(format!("{}:", field.label()));
+                if self.capturing == Some(field) {
+                    ui.strong("press the new hotkey...");
+                    if ui.button("Cancel").clicked() {
+                        self.capturing = None;
+                    }
+                } else {
+                    match self.hotkey(field) {
+                        Some(hotkey) => ui.strong(hotkey.to_string()),
+                        None => ui.weak("(not set)"),
+                    };
+                    if ui.button("Change...").clicked() {
+                        self.capturing = Some(field);
+                    }
+                    if field.optional() && self.hotkey(field).is_some() && ui.button("Clear").clicked() {
+                        self.set_hotkey(field, None);
+                    }
+                    if self.hotkey(field) != field.default_hotkey() && ui.button("Default").clicked() {
+                        self.set_hotkey(field, field.default_hotkey());
+                    }
                 }
-            } else {
-                ui.strong(self.cfg.hotkeys.convert_word.to_string());
-                if ui.button("Change...").clicked() {
-                    self.capturing = true;
-                }
-                if ui.button("Reset (Pause)").clicked() {
-                    self.cfg.hotkeys.convert_word = Hotkey::default();
-                }
-            }
-        });
-        ui.label("Pressing it again cycles through the other layouts and back to the original one.");
+            });
+        }
+        ui.separator();
+        ui.label("Pause and Break are the same key. Pressing the word hotkey again cycles through the other layouts and back to the original one.");
     }
 
     fn troubleshooting_tab(&mut self, ui: &mut egui::Ui) {
@@ -271,7 +357,7 @@ impl App {
 
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        if self.capturing {
+        if self.capturing.is_some() {
             let ctx = ui.ctx().clone();
             self.poll_hotkey_capture(&ctx);
         }

@@ -1,8 +1,8 @@
-//! Low-level keyboard / mouse hooks, the typed-word tracking and the word conversion.
+//! Low-level keyboard / mouse hooks, the typed-word tracking and the hotkey actions.
 
 use std::cell::RefCell;
 use std::panic::{catch_unwind, AssertUnwindSafe};
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use windows::Win32::Foundation::{HINSTANCE, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
@@ -15,22 +15,50 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
 use windows::Win32::UI::WindowsAndMessaging::{
     CallNextHookEx, PostThreadMessageW, SetWindowsHookExW, UnhookWindowsHookEx, HHOOK, KBDLLHOOKSTRUCT,
     LLKHF_EXTENDED, WH_KEYBOARD_LL, WH_MOUSE_LL, WM_APP, WM_KEYDOWN, WM_KEYUP, WM_LBUTTONDOWN,
-    WM_MBUTTONDOWN, WM_RBUTTONDOWN, WM_SYSKEYDOWN, WM_SYSKEYUP,
+    WM_MBUTTONDOWN, WM_QUIT, WM_RBUTTONDOWN, WM_SYSKEYDOWN, WM_SYSKEYUP,
 };
 
-use lite_switcher_core::config::Config;
+use lite_switcher_core::config::{Config, Hotkeys};
+use lite_switcher_core::hotkey::Hotkey;
 use lite_switcher_core::layout::{self, key_to_char, Layout};
 use lite_switcher_core::word::{KeyStroke, WordBuffer};
 
 use crate::inject::{self, MARKER};
+use crate::selection::{self, Kind};
 
-/// Posted to the main thread when the conversion hotkey is pressed.
-pub const WM_CONVERT: u32 = WM_APP + 1;
-/// Posted to the main thread when the pause state changed (the tray has to be refreshed).
-pub const WM_TRAY_REFRESH: u32 = WM_APP + 2;
+/// Posted to the main thread when a hotkey is pressed; `wParam` is the `Action`.
+pub const WM_ACTION: u32 = WM_APP + 1;
 
 static MAIN_THREAD: AtomicU32 = AtomicU32::new(0);
-pub static PAUSED: AtomicBool = AtomicBool::new(false);
+
+/// What a hotkey (or a tray menu item) asks the daemon to do.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Action {
+    ConvertWord,
+    ConvertSelection,
+    InvertCase,
+    ToggleAutoswitch,
+}
+
+impl Action {
+    pub fn from_wparam(value: usize) -> Option<Action> {
+        [Action::ConvertWord, Action::ConvertSelection, Action::InvertCase, Action::ToggleAutoswitch]
+            .into_iter()
+            .find(|a| *a as usize == value)
+    }
+
+    fn hotkey(self, hotkeys: &Hotkeys) -> Option<Hotkey> {
+        match self {
+            Action::ConvertWord => Some(hotkeys.convert_word),
+            Action::ConvertSelection => hotkeys.convert_selection,
+            Action::InvertCase => hotkeys.invert_case,
+            Action::ToggleAutoswitch => hotkeys.toggle_autoswitch,
+        }
+    }
+}
+
+const ACTIONS: [Action; 4] =
+    [Action::ConvertWord, Action::ConvertSelection, Action::InvertCase, Action::ToggleAutoswitch];
 
 struct State {
     config: Config,
@@ -42,8 +70,8 @@ struct State {
     /// Cached "is the foreground app ignored" answer for `ignored_hwnd`.
     ignored_hwnd: isize,
     ignored: bool,
-    hotkey_down: bool,
-    swallow_up: bool,
+    /// The key of a hotkey whose press was swallowed (its release and auto-repeat are swallowed too).
+    swallowed_vk: Option<u32>,
 }
 
 thread_local! {
@@ -65,6 +93,9 @@ pub fn set_config(config: Config) {
         let mut slot = s.borrow_mut();
         match slot.as_mut() {
             Some(state) => {
+                if state.config.common.autoswitch != config.common.autoswitch {
+                    tracing::info!("autoswitch = {} (not implemented yet)", config.common.autoswitch);
+                }
                 state.config = config;
                 state.layouts = layouts;
                 state.ignored_hwnd = 0;
@@ -77,18 +108,29 @@ pub fn set_config(config: Config) {
                     buffer_hwnd: 0,
                     ignored_hwnd: 0,
                     ignored: false,
-                    hotkey_down: false,
-                    swallow_up: false,
+                    swallowed_vk: None,
                 })
             }
         }
     });
 }
 
-/// Posts a thread message to the main (hook) thread.
-pub fn post_to_main(msg: u32) {
+/// Is the automatic switching turned on? (the switching itself is not implemented yet)
+pub fn autoswitch_enabled() -> bool {
+    with_state(|s| s.config.common.autoswitch).unwrap_or(false)
+}
+
+/// Posts an action to the main (hook) thread.
+pub fn post_action(action: Action) {
     unsafe {
-        let _ = PostThreadMessageW(MAIN_THREAD.load(Ordering::Relaxed), msg, WPARAM(0), LPARAM(0));
+        let _ = PostThreadMessageW(MAIN_THREAD.load(Ordering::Relaxed), WM_ACTION, WPARAM(action as usize), LPARAM(0));
+    }
+}
+
+/// Posts `WM_QUIT` to the main thread.
+pub fn post_quit() {
+    unsafe {
+        let _ = PostThreadMessageW(MAIN_THREAD.load(Ordering::Relaxed), WM_QUIT, WPARAM(0), LPARAM(0));
     }
 }
 
@@ -135,11 +177,18 @@ unsafe extern "system" fn mouse_proc(code: i32, wparam: WPARAM, lparam: LPARAM) 
     CallNextHookEx(None, code, wparam, lparam)
 }
 
-fn modifiers_match(hk: &lite_switcher_core::hotkey::Hotkey) -> bool {
+fn modifiers_match(hk: &Hotkey) -> bool {
     inject::is_down(VK_CONTROL) == hk.ctrl
         && inject::is_down(VK_MENU) == hk.alt
         && inject::is_down(VK_SHIFT) == hk.shift
         && (inject::is_down(VK_LWIN) || inject::is_down(VK_RWIN)) == hk.win
+}
+
+/// The action whose hotkey is exactly the pressed key with the held modifiers.
+fn match_action(hotkeys: &Hotkeys, vk: u32) -> Option<Action> {
+    ACTIONS.into_iter().find(|action| {
+        action.hotkey(hotkeys).is_some_and(|hk| hk.vk == vk && modifiers_match(&hk))
+    })
 }
 
 fn is_modifier(vk: VIRTUAL_KEY) -> bool {
@@ -155,31 +204,31 @@ fn on_key(msg: u32, kb: &KBDLLHOOKSTRUCT) -> bool {
     let down = matches!(msg, WM_KEYDOWN | WM_SYSKEYDOWN);
     let up = matches!(msg, WM_KEYUP | WM_SYSKEYUP);
     let vk = VIRTUAL_KEY(kb.vkCode as u16);
-    let paused = PAUSED.load(Ordering::Relaxed);
 
     with_state(|s| {
-        let hotkey = s.config.hotkeys.convert_word;
+        let key = vk.0 as u32;
 
-        if vk.0 as u32 == hotkey.vk {
-            if up {
-                s.hotkey_down = false;
-                if std::mem::take(&mut s.swallow_up) {
+        if up && s.swallowed_vk == Some(key) {
+            s.swallowed_vk = None;
+            return true;
+        }
+        if down {
+            if s.swallowed_vk == Some(key) {
+                return true; // auto-repeat of a hotkey
+            }
+            if let Some(action) = match_action(&s.config.hotkeys, key) {
+                if !foreground_ignored(s) {
+                    s.swallowed_vk = Some(key);
+                    if action.hotkey(&s.config.hotkeys).is_some_and(|hk| hk.alt || hk.win) {
+                        inject::mask_menu_activation();
+                    }
+                    post_action(action);
                     return true;
                 }
-            } else if down && !paused && modifiers_match(&hotkey) && !foreground_ignored(s) {
-                if !s.hotkey_down {
-                    s.hotkey_down = true;
-                    s.swallow_up = true;
-                    post_to_main(WM_CONVERT);
-                }
-                return true; // also swallows auto-repeat
             }
         }
 
-        if !down || paused || is_modifier(vk) {
-            return false;
-        }
-        if foreground_ignored(s) {
+        if !down || is_modifier(vk) || foreground_ignored(s) {
             return false;
         }
         track_key(s, vk, kb);
@@ -234,8 +283,57 @@ fn track_key(s: &mut State, vk: VIRTUAL_KEY, kb: &KBDLLHOOKSTRUCT) {
     }
 }
 
-/// Converts the last typed word (called from the main thread on `WM_CONVERT`).
-pub fn convert_word() {
+/// Runs an action in the main thread. Returns true if the tray menu has to be refreshed.
+pub fn handle_action(action: Action) -> bool {
+    match action {
+        Action::ConvertWord => convert_word(),
+        Action::ConvertSelection => start_selection(Kind::ConvertLayout, action),
+        Action::InvertCase => start_selection(Kind::InvertCase, action),
+        Action::ToggleAutoswitch => return toggle_autoswitch(),
+    }
+    false
+}
+
+/// Flips the autoswitch flag and stores it in the config file.
+fn toggle_autoswitch() -> bool {
+    let Some((config, hotkey)) = with_state(|s| {
+        s.config.common.autoswitch = !s.config.common.autoswitch;
+        (s.config.clone(), s.config.hotkeys.toggle_autoswitch)
+    }) else {
+        return false;
+    };
+    tracing::info!("autoswitch = {} (not implemented yet)", config.common.autoswitch);
+    if let Some(hotkey) = hotkey {
+        inject::release_hotkey_modifiers(&hotkey);
+    }
+    if let Err(e) = config.save() {
+        tracing::warn!("cannot save the config: {e}");
+    }
+    true
+}
+
+fn start_selection(kind: Kind, action: Action) {
+    let hwnd = inject::foreground();
+    let request = with_state(|s| {
+        if s.layouts.len() < 2 && kind == Kind::ConvertLayout {
+            return None;
+        }
+        Some(selection::Request {
+            kind,
+            hwnd: hwnd.0 as isize,
+            hotkey: action.hotkey(&s.config.hotkeys)?,
+            layouts: s.layouts.clone(),
+            current_id: layout::describe(inject::window_hkl(hwnd)).id,
+        })
+    })
+    .flatten();
+    if let Some(request) = request {
+        selection::start(request);
+    }
+}
+
+/// Converts the last typed word (the layout cycle continues on every press).
+fn convert_word() {
     let hwnd = inject::foreground();
     let plan = with_state(|s| {
         if hwnd.0 as isize != s.buffer_hwnd || s.buffer.is_empty() {
