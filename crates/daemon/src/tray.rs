@@ -6,6 +6,8 @@ use std::process::Command;
 use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
 
+use lite_switcher_core::i18n::Translator;
+
 use crate::hook::{post_action, post_quit, Action};
 
 /// A round icon with the letter "L".
@@ -38,19 +40,21 @@ fn settings_exe() -> Option<PathBuf> {
 pub struct Tray {
     icon: TrayIcon,
     autoswitch: CheckMenuItem,
+    settings: MenuItem,
+    exit: MenuItem,
 }
 
 impl Tray {
-    pub fn new(autoswitch_on: bool) -> Result<Tray, Box<dyn std::error::Error>> {
-        let autoswitch = CheckMenuItem::new("Автоперемикання", true, autoswitch_on, None);
-        let settings = MenuItem::new("Settings...", true, None);
-        let exit = MenuItem::new("Exit", true, None);
+    pub fn new(autoswitch_on: bool, tr: &Translator) -> Result<Tray, Box<dyn std::error::Error>> {
+        let autoswitch = CheckMenuItem::new(tr.t("tray.auto_switching"), true, autoswitch_on, None);
+        let settings = MenuItem::new(tr.t("tray.settings"), true, None);
+        let exit = MenuItem::new(tr.t("tray.exit"), true, None);
         let menu = Menu::new();
         menu.append_items(&[&autoswitch, &settings, &PredefinedMenuItem::separator(), &exit])?;
 
         let icon = TrayIconBuilder::new()
             .with_menu(Box::new(menu))
-            .with_tooltip("Lite Switcher")
+            .with_tooltip(tr.t("tray.tooltip"))
             .with_icon(make_icon())
             .build()?;
 
@@ -70,11 +74,19 @@ impl Tray {
                 post_quit();
             }
         }));
-        Ok(Tray { icon, autoswitch })
+        Ok(Tray { icon, autoswitch, settings, exit })
     }
 
     pub fn set_visible(&self, visible: bool) {
         let _ = self.icon.set_visible(visible);
+    }
+
+    /// Shows the texts of the menu and the tooltip in the given language.
+    pub fn apply_language(&self, tr: &Translator) {
+        self.autoswitch.set_text(tr.t("tray.auto_switching"));
+        self.settings.set_text(tr.t("tray.settings"));
+        self.exit.set_text(tr.t("tray.exit"));
+        let _ = self.icon.set_tooltip(Some(tr.t("tray.tooltip")));
     }
 
     /// Syncs the check mark of the menu item with the autoswitch setting.

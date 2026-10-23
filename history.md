@@ -2,6 +2,34 @@
 
 Versions and changes, newest first. Every change to the project is recorded here.
 
+## 0.3.0 - 2026-10-23
+
+### Added
+- Internationalization of every text of the daemon (tray menu, tooltip) and of the settings
+  (window title, tabs, labels, buttons, hints, status messages, hotkey names) into English, Russian
+  and Ukrainian.
+- `Language` folder with one `.ini` file per language (`English.ini`, `Russian.ini`, `Ukrainian.ini`),
+  split into groups (`[tray]`, `[tabs]`, `[buttons]`, `[common]`, `[hotkeys]`, `[troubleshooting]`,
+  `[sounds]`, `[status]`, `[layouts]`, `[app]`). The folder is searched next to the executables and in
+  the parent folders (so it is found when the programs run from `target\debug`).
+- English is built into the binaries (`English.ini` is embedded at compile time) and is the fallback
+  for missing texts, so the programs work even without the `Language` folder.
+- "Language" drop-down in the "General" group of the "Common" tab. Its items are English plus the
+  languages found in the `Language` folder (a file is a language if it has `[language] code` and
+  `name`), so a new translation appears after dropping a file into the folder. The texts of the
+  settings change immediately when another language is picked.
+- `[common] language` in `config.ini` (`en`, `ru`, `uk`...). The daemon reads it at start and
+  updates the tray menu when the config changes.
+- Tests: every language file has exactly the keys of `English.ini` (and the same `{placeholders}`),
+  and every text key used in the code exists - a new text must be added to all three files.
+
+### Changed
+- The tray menu item and the check box in the settings are called "auto-switching" (translated:
+  "автопереключение" / "автоперемикання").
+- Keyboard layouts are shown with English names: `English (USA)`, `Russian (Russia)`,
+  `Ukrainian (Ukraine)` (translated through `[layouts]`; other layouts get the English name from
+  Windows instead of the name in the language of the system).
+
 ## 0.2.0 - 2026-10-23
 
 ### Added

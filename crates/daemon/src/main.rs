@@ -17,7 +17,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     DispatchMessageW, GetMessageW, SetTimer, TranslateMessage, MSG, WM_TIMER,
 };
 
-use lite_switcher_core::{autostart, config::Config};
+use lite_switcher_core::{autostart, config::Config, i18n::Translator};
 
 const CONFIG_POLL_MS: u32 = 1000;
 
@@ -83,7 +83,7 @@ fn main() {
             return;
         }
     };
-    let tray = match tray::Tray::new(config.common.autoswitch) {
+    let tray = match tray::Tray::new(config.common.autoswitch, &Translator::new(&config.common.language)) {
         Ok(t) => Some(t),
         Err(e) => {
             tracing::warn!("tray icon: {e}");
@@ -119,6 +119,7 @@ fn main() {
                             if let Some(t) = &tray {
                                 t.set_visible(cfg.common.show_tray_icon);
                                 t.refresh(cfg.common.autoswitch);
+                                t.apply_language(&Translator::new(&cfg.common.language));
                             }
                             hook::set_config(cfg);
                         }

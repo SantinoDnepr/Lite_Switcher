@@ -18,6 +18,8 @@ pub struct Common {
     pub keep_trailing_space: bool,
     /// Automatic layout switching. Not implemented yet: the flag is only stored.
     pub autoswitch: bool,
+    /// Language of the texts: the code of a file in the `Language` folder, `en` = built-in English.
+    pub language: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -76,6 +78,7 @@ impl Default for Config {
                 show_tray_icon: true,
                 keep_trailing_space: true,
                 autoswitch: false,
+                language: "en".into(),
             },
             hotkeys: Hotkeys {
                 convert_word: Hotkey::default(),
@@ -162,6 +165,9 @@ impl Config {
         if let Some(v) = get("common", "autoswitch").and_then(parse_bool) {
             cfg.common.autoswitch = v;
         }
+        if let Some(v) = get("common", "language").map(str::trim).filter(|v| !v.is_empty()) {
+            cfg.common.language = v.to_string();
+        }
         if let Some(v) = get("hotkeys", "convert_word").and_then(|v| v.parse().ok()) {
             cfg.hotkeys.convert_word = v;
         }
@@ -214,6 +220,8 @@ show_tray_icon = {tray}
 keep_trailing_space = {space}
 ; automatic layout switching (not implemented yet, the flag is only stored)
 autoswitch = {autoswitch}
+; language of the texts: en (built in) or the code of a file in the Language folder (ru, uk, ...)
+language = {language}
 
 [hotkeys]
 ; convert the last typed word to the next layout (e.g. Pause, Ctrl+Pause, Shift+F9)
@@ -245,6 +253,7 @@ on_convert = {wav}
             tray = c.show_tray_icon,
             space = c.keep_trailing_space,
             autoswitch = c.autoswitch,
+            language = c.language,
             hotkey = self.hotkeys.convert_word,
             hk_selection = opt_hotkey_string(&self.hotkeys.convert_selection),
             hk_case = opt_hotkey_string(&self.hotkeys.invert_case),
@@ -300,6 +309,7 @@ mod tests {
         cfg.common.exclude_layouts = vec!["de-DE".into()];
         cfg.common.autostart = true;
         cfg.common.autoswitch = true;
+        cfg.common.language = "uk".into();
         cfg.hotkeys.convert_word = "Ctrl+F9".parse().unwrap();
         cfg.hotkeys.convert_selection = None;
         cfg.hotkeys.invert_case = Some("Alt+F8".parse().unwrap());

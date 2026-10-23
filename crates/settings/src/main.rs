@@ -11,6 +11,7 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_CONTROL, 
 
 use lite_switcher_core::config::{Config, Hotkeys};
 use lite_switcher_core::hotkey::{vk_name, Hotkey};
+use lite_switcher_core::i18n::{self, Language, Translator};
 use lite_switcher_core::{autostart, layout};
 
 #[derive(Clone, Copy, PartialEq)]
@@ -38,12 +39,13 @@ impl HotkeyField {
         HotkeyField::ToggleAutoswitch,
     ];
 
-    fn label(self) -> &'static str {
+    /// Key of the label in the language files.
+    fn label_key(self) -> &'static str {
         match self {
-            HotkeyField::ConvertWord => "Convert the last word",
-            HotkeyField::ConvertSelection => "Convert the selected text",
-            HotkeyField::InvertCase => "Invert the case of the selected text",
-            HotkeyField::ToggleAutoswitch => "Turn the autoswitch on / off",
+            HotkeyField::ConvertWord => "hotkeys.convert_word",
+            HotkeyField::ConvertSelection => "hotkeys.convert_selection",
+            HotkeyField::InvertCase => "hotkeys.invert_case",
+            HotkeyField::ToggleAutoswitch => "hotkeys.toggle_autoswitch",
         }
     }
 
@@ -69,6 +71,12 @@ struct LayoutRow {
     installed: bool,
 }
 
+/// The message under the buttons. Kept as a key, so that it is translated again when the language changes.
+struct Status {
+    key: &'static str,
+    args: Vec<(&'static str, String)>,
+}
+
 struct App {
     cfg: Config,
     tab: Tab,
@@ -76,7 +84,12 @@ struct App {
     rows: Vec<LayoutRow>,
     ignored_text: String,
     capturing: Option<HotkeyField>,
-    status: String,
+    status: Status,
+    tr: Translator,
+    /// English plus the languages found in the `Language` folder.
+    languages: Vec<Language>,
+    /// The window title has to be updated (the language changed).
+    title_dirty: bool,
 }
 
 fn daemon_exe() -> Option<PathBuf> {
@@ -90,9 +103,10 @@ fn is_down(vk: u32) -> bool {
 impl App {
     fn new() -> App {
         let (cfg, status) = match Config::load_or_create() {
-            Ok(cfg) => (cfg, format!("Config: {}", Config::path().display())),
-            Err(e) => (Config::default(), format!("Cannot read the config, defaults are shown: {e}")),
+            Ok(cfg) => (cfg, Status { key: "status.config_path", args: vec![("path", Config::path().display().to_string())] }),
+            Err(e) => (Config::default(), Status { key: "status.config_read_error_defaults", args: vec![("error", e)] }),
         };
+        let tr = Translator::new(&cfg.common.language);
         let mut app = App {
             cfg,
             tab: Tab::Common,
@@ -101,9 +115,22 @@ impl App {
             ignored_text: String::new(),
             capturing: None,
             status,
+            tr,
+            languages: i18n::available(),
+            title_dirty: false,
         };
         app.load_form();
         app
+    }
+
+    fn set_status(&mut self, key: &'static str, args: &[(&'static str, String)]) {
+        self.status = Status { key, args: args.to_vec() };
+    }
+
+    /// Switches the texts of the window to the language selected in the config being edited.
+    fn apply_language(&mut self) {
+        self.tr = Translator::new(&self.cfg.common.language);
+        self.title_dirty = true;
     }
 
     /// Fills the form state from `self.cfg` and the layouts installed in the system.
@@ -190,27 +217,25 @@ impl App {
     fn save(&mut self) {
         self.store_form();
         if let Some(hotkey) = self.duplicate_hotkey() {
-            self.status = format!("The hotkey {hotkey} is assigned to more than one action.");
+            self.set_status("status.duplicate_hotkey", &[("hotkey", hotkey.to_string())]);
             return;
         }
         if !self.auto_layouts && self.cfg.common.layouts.is_empty() {
-            self.status = "Select at least one layout (or enable \"All system layouts\").".into();
+            self.set_status("status.select_layout", &[]);
             return;
         }
         if let Err(e) = self.cfg.save() {
-            self.status = format!("Cannot save the config: {e}");
+            self.set_status("status.save_error", &[("error", e.to_string())]);
             return;
         }
-        self.status = "Saved. A running daemon applies the changes automatically.".into();
+        self.set_status("status.saved", &[]);
         match daemon_exe() {
             Some(exe) if exe.exists() => {
                 if let Err(e) = autostart::set(self.cfg.common.autostart, &exe) {
-                    self.status = format!("Saved, but autostart was not updated: {e}");
+                    self.set_status("status.autostart_error", &[("error", e)]);
                 }
             }
-            _ if self.cfg.common.autostart => {
-                self.status = "Saved, but lite-switcher.exe was not found next to this program (autostart skipped).".into();
-            }
+            _ if self.cfg.common.autostart => self.set_status("status.daemon_not_found", &[]),
             _ => {}
         }
     }
@@ -220,9 +245,10 @@ impl App {
             Ok(cfg) => {
                 self.cfg = cfg;
                 self.load_form();
-                self.status = "Reloaded from file.".into();
+                self.apply_language();
+                self.set_status("status.reloaded", &[]);
             }
-            Err(e) => self.status = format!("Cannot read the config: {e}"),
+            Err(e) => self.set_status("status.reload_error", &[("error", e)]),
         }
     }
 
@@ -251,29 +277,26 @@ impl App {
     }
 
     fn common_tab(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Keyboard layouts");
-        ui.checkbox(&mut self.auto_layouts, "All system layouts (auto)");
-        ui.label(if self.auto_layouts {
-            "Uncheck the layouts that must not take part in the conversion cycle."
-        } else {
-            "Checked layouts take part in the cycle, in the order shown below."
-        });
+        let tr = &self.tr;
+        ui.heading(tr.t("common.layouts_heading"));
+        ui.checkbox(&mut self.auto_layouts, tr.t("common.all_layouts"));
+        ui.label(if self.auto_layouts { tr.t("common.layouts_auto_hint") } else { tr.t("common.layouts_manual_hint") });
         let manual = !self.auto_layouts;
         let mut swap: Option<(usize, usize)> = None;
         let last = self.rows.len().saturating_sub(1);
         for (i, row) in self.rows.iter_mut().enumerate() {
             ui.horizontal(|ui| {
                 ui.checkbox(&mut row.enabled, "");
-                let mut label = format!("{}  {}", row.id, row.name);
+                let mut label = format!("{}  {}", row.id, tr.layout_name(&row.id, &row.name));
                 if !row.installed {
-                    label.push_str("  (not installed)");
+                    label.push_str(&format!("  {}", tr.t("common.not_installed")));
                 }
                 ui.label(label);
                 if manual {
-                    if ui.add_enabled(i > 0, egui::Button::new("Up")).clicked() {
+                    if ui.add_enabled(i > 0, egui::Button::new(tr.t("buttons.up"))).clicked() {
                         swap = Some((i, i - 1));
                     }
-                    if ui.add_enabled(i < last, egui::Button::new("Down")).clicked() {
+                    if ui.add_enabled(i < last, egui::Button::new(tr.t("buttons.down"))).clicked() {
                         swap = Some((i, i + 1));
                     }
                 }
@@ -283,51 +306,73 @@ impl App {
             self.rows.swap(a, b);
         }
         ui.separator();
-        ui.heading("General");
-        ui.checkbox(&mut self.cfg.common.autoswitch, "Автоперемикання");
-        ui.label("Automatic layout switching is not implemented yet: the flag is only stored.");
-        ui.checkbox(&mut self.cfg.common.autostart, "Start with Windows");
-        ui.checkbox(&mut self.cfg.common.show_tray_icon, "Show the tray icon");
-        ui.checkbox(&mut self.cfg.common.keep_trailing_space, "Keep spaces typed after the word when converting");
+        ui.heading(tr.t("common.general_heading"));
+        ui.checkbox(&mut self.cfg.common.autoswitch, tr.t("common.auto_switching"));
+        ui.label(tr.t("common.auto_switching_hint"));
+        ui.checkbox(&mut self.cfg.common.autostart, tr.t("common.autostart"));
+        ui.checkbox(&mut self.cfg.common.show_tray_icon, tr.t("common.show_tray_icon"));
+        ui.checkbox(&mut self.cfg.common.keep_trailing_space, tr.t("common.keep_trailing_space"));
+
+        let current = &self.cfg.common.language;
+        let current_name = self
+            .languages
+            .iter()
+            .find(|l| l.code.eq_ignore_ascii_case(current))
+            .map_or_else(|| current.clone(), |l| l.name.clone());
+        let mut language_changed = false;
+        ui.horizontal(|ui| {
+            ui.label(tr.t("common.language"));
+            egui::ComboBox::from_id_salt("language").selected_text(current_name).show_ui(ui, |ui| {
+                for language in &self.languages {
+                    language_changed |= ui
+                        .selectable_value(&mut self.cfg.common.language, language.code.clone(), &language.name)
+                        .changed();
+                }
+            });
+        });
+        if language_changed {
+            self.apply_language();
+        }
     }
 
     fn hotkeys_tab(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Hotkeys");
+        ui.heading(self.tr.t("hotkeys.heading"));
         for field in HotkeyField::ALL {
             ui.horizontal(|ui| {
-                ui.label(format!("{}:", field.label()));
+                ui.label(format!("{}:", self.tr.t(field.label_key())));
                 if self.capturing == Some(field) {
-                    ui.strong("press the new hotkey...");
-                    if ui.button("Cancel").clicked() {
+                    ui.strong(self.tr.t("hotkeys.press_new"));
+                    if ui.button(self.tr.t("buttons.cancel")).clicked() {
                         self.capturing = None;
                     }
                 } else {
                     match self.hotkey(field) {
                         Some(hotkey) => ui.strong(hotkey.to_string()),
-                        None => ui.weak("(not set)"),
+                        None => ui.weak(self.tr.t("hotkeys.not_set")),
                     };
-                    if ui.button("Change...").clicked() {
+                    if ui.button(self.tr.t("buttons.change")).clicked() {
                         self.capturing = Some(field);
                     }
-                    if field.optional() && self.hotkey(field).is_some() && ui.button("Clear").clicked() {
+                    if field.optional() && self.hotkey(field).is_some() && ui.button(self.tr.t("buttons.clear")).clicked() {
                         self.set_hotkey(field, None);
                     }
-                    if self.hotkey(field) != field.default_hotkey() && ui.button("Default").clicked() {
+                    if self.hotkey(field) != field.default_hotkey() && ui.button(self.tr.t("buttons.default")).clicked() {
                         self.set_hotkey(field, field.default_hotkey());
                     }
                 }
             });
         }
         ui.separator();
-        ui.label("Pause and Break are the same key. Pressing the word hotkey again cycles through the other layouts and back to the original one.");
+        ui.label(self.tr.t("hotkeys.note"));
     }
 
     fn troubleshooting_tab(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Troubleshooting");
+        let tr = &self.tr;
+        ui.heading(tr.t("troubleshooting.heading"));
         let t = &mut self.cfg.troubleshooting;
-        ui.checkbox(&mut t.log_enabled, "Write a log file (restart the daemon to apply)");
+        ui.checkbox(&mut t.log_enabled, tr.t("troubleshooting.log_enabled"));
         ui.horizontal(|ui| {
-            ui.label("Log level:");
+            ui.label(tr.t("troubleshooting.log_level"));
             egui::ComboBox::from_id_salt("log_level").selected_text(t.log_level.clone()).show_ui(ui, |ui| {
                 for level in ["error", "warn", "info", "debug"] {
                     ui.selectable_value(&mut t.log_level, level.to_string(), level);
@@ -335,22 +380,22 @@ impl App {
             });
         });
         ui.horizontal(|ui| {
-            ui.label("Pause between synthetic keys (ms):");
+            ui.label(tr.t("troubleshooting.key_delay"));
             ui.add(egui::DragValue::new(&mut t.key_delay_ms).range(0..=100));
         });
-        ui.label("Ignored applications (executable names, one per line, e.g. game.exe):");
+        ui.label(tr.t("troubleshooting.ignored_apps"));
         ui.add(egui::TextEdit::multiline(&mut self.ignored_text).desired_rows(4).desired_width(f32::INFINITY));
         ui.horizontal(|ui| {
-            if ui.button("Open the config folder").clicked() {
+            if ui.button(tr.t("buttons.open_config_folder")).clicked() {
                 let _ = Command::new("explorer").arg(Config::dir()).spawn();
             }
         });
     }
 
     fn sounds_tab(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Sounds");
-        ui.checkbox(&mut self.cfg.sounds.enabled, "Play a sound after the conversion");
-        ui.label("Path to a .wav file (empty = the system default sound):");
+        ui.heading(self.tr.t("sounds.heading"));
+        ui.checkbox(&mut self.cfg.sounds.enabled, self.tr.t("sounds.enabled"));
+        ui.label(self.tr.t("sounds.path"));
         ui.add(egui::TextEdit::singleline(&mut self.cfg.sounds.on_convert).desired_width(f32::INFINITY));
     }
 }
@@ -361,25 +406,29 @@ impl eframe::App for App {
             let ctx = ui.ctx().clone();
             self.poll_hotkey_capture(&ctx);
         }
+        if std::mem::take(&mut self.title_dirty) {
+            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Title(self.tr.t("app.title").to_string()));
+        }
         egui::Panel::bottom("bottom").show(ui, |ui| {
             ui.add_space(4.0);
             ui.horizontal(|ui| {
-                if ui.button("Save").clicked() {
+                if ui.button(self.tr.t("buttons.save")).clicked() {
                     self.save();
                 }
-                if ui.button("Reload").clicked() {
+                if ui.button(self.tr.t("buttons.reload")).clicked() {
                     self.reload();
                 }
             });
-            ui.label(&self.status);
+            let args: Vec<(&str, &str)> = self.status.args.iter().map(|(n, v)| (*n, v.as_str())).collect();
+            ui.label(self.tr.tf(self.status.key, &args));
             ui.add_space(4.0);
         });
         egui::CentralPanel::default().show(ui, |ui| {
             ui.horizontal(|ui| {
-                ui.selectable_value(&mut self.tab, Tab::Common, "Common");
-                ui.selectable_value(&mut self.tab, Tab::Hotkeys, "Hotkeys");
-                ui.selectable_value(&mut self.tab, Tab::Troubleshooting, "Troubleshooting");
-                ui.selectable_value(&mut self.tab, Tab::Sounds, "Sounds");
+                ui.selectable_value(&mut self.tab, Tab::Common, self.tr.t("tabs.common"));
+                ui.selectable_value(&mut self.tab, Tab::Hotkeys, self.tr.t("tabs.hotkeys"));
+                ui.selectable_value(&mut self.tab, Tab::Troubleshooting, self.tr.t("tabs.troubleshooting"));
+                ui.selectable_value(&mut self.tab, Tab::Sounds, self.tr.t("tabs.sounds"));
             });
             ui.separator();
             egui::ScrollArea::vertical().show(ui, |ui| match self.tab {
@@ -406,9 +455,7 @@ fn main() -> eframe::Result {
         viewport: egui::ViewportBuilder::default().with_inner_size([520.0, 480.0]).with_min_inner_size([420.0, 360.0]),
         ..Default::default()
     };
-    eframe::run_native(
-        "Lite Switcher - Settings",
-        options,
-        Box::new(|_cc| Ok(Box::new(App::new()))),
-    )
+    let app = App::new();
+    let title = app.tr.t("app.title").to_string();
+    eframe::run_native(&title, options, Box::new(|_cc| Ok(Box::new(app))))
 }

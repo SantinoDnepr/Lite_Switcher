@@ -16,8 +16,17 @@ variant of the same keys, and so on, back to the original. The layouts are taken
 | `Alt+Pause` | invert the case of the selected text |
 | *(not assigned)* | turn the automatic switching on / off |
 
-The tray menu has the "Автоперемикання" check box (automatic switching - not implemented yet) and
+The tray menu has the "auto-switching" check box (automatic switching - not implemented yet) and
 the items "Settings..." and "Exit".
+
+## Languages
+
+The texts are translated into English, Russian and Ukrainian. English is built into the programs;
+the other languages are the files of the `Language` folder, which must stay next to the executables
+(copy it together with them). Pick the language in the settings (Common / General / Language). To add
+a language, copy `Language\English.ini`, translate the values, set `[language] code` and `name` and
+put the file into the folder - it shows up in the list. A test checks that all the files have the
+same keys, so every new text has to be added to all of them.
 
 ## Programs
 

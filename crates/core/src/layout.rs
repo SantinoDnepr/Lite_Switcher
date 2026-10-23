@@ -3,7 +3,7 @@
 use std::ffi::c_void;
 
 use windows::core::PCWSTR;
-use windows::Win32::Globalization::{GetLocaleInfoEx, LCIDToLocaleName, LOCALE_SLOCALIZEDDISPLAYNAME};
+use windows::Win32::Globalization::{GetLocaleInfoEx, LCIDToLocaleName, LOCALE_SENGLISHDISPLAYNAME};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     GetKeyboardLayoutList, MapVirtualKeyExW, ToUnicodeEx, HKL, MAPVK_VSC_TO_VK_EX, VK_CAPITAL, VK_SHIFT,
 };
@@ -17,7 +17,8 @@ pub struct Layout {
     pub hkl: isize,
     /// Locale name of the layout language, e.g. `uk-UA`. Used in the config file.
     pub id: String,
-    /// Human readable language name.
+    /// English name of the language given by Windows, e.g. `English (United States)`.
+    /// For the names shown to the user see `i18n::Translator::layout_name`.
     pub name: String,
 }
 
@@ -39,7 +40,7 @@ pub fn describe(hkl: isize) -> Layout {
 
     let mut display = [0u16; 128];
     let n = unsafe {
-        GetLocaleInfoEx(PCWSTR(name.as_ptr()), LOCALE_SLOCALIZEDDISPLAYNAME, Some(&mut display))
+        GetLocaleInfoEx(PCWSTR(name.as_ptr()), LOCALE_SENGLISHDISPLAYNAME, Some(&mut display))
     };
     let name = if n > 0 { wide_to_string(&display, n) } else { id.clone() };
     Layout { hkl, id, name }
