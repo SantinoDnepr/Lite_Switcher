@@ -287,7 +287,7 @@ impl App {
         for (i, row) in self.rows.iter_mut().enumerate() {
             ui.horizontal(|ui| {
                 ui.checkbox(&mut row.enabled, "");
-                let mut label = format!("{}  {}", row.id, tr.layout_name(&row.id, &row.name));
+                let mut label = format!("{}  {}", row.id, row.name);
                 if !row.installed {
                     label.push_str(&format!("  {}", tr.t("common.not_installed")));
                 }

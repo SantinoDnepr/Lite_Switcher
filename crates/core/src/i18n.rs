@@ -151,12 +151,6 @@ impl Translator {
     pub fn tf(&self, key: &str, args: &[(&str, &str)]) -> String {
         args.iter().fold(self.t(key).to_string(), |text, (name, value)| text.replace(&format!("{{{name}}}"), value))
     }
-
-    /// Name of a keyboard layout by its locale id; `fallback` (the English name from Windows)
-    /// if the language files do not know the layout.
-    pub fn layout_name(&self, id: &str, fallback: &str) -> String {
-        self.lookup(&format!("layouts.{id}")).unwrap_or(fallback).to_string()
-    }
 }
 
 #[cfg(test)]
@@ -176,10 +170,6 @@ mod tests {
     fn english_is_built_in() {
         let tr = Translator::english();
         assert_eq!(tr.t("tray.auto_switching"), "auto-switching");
-        assert_eq!(tr.layout_name("en-US", "x"), "English (USA)");
-        assert_eq!(tr.layout_name("ru-RU", "x"), "Russian (Russia)");
-        assert_eq!(tr.layout_name("uk-UA", "x"), "Ukrainian (Ukraine)");
-        assert_eq!(tr.layout_name("de-DE", "German (Germany)"), "German (Germany)");
         assert_eq!(tr.tf("status.duplicate_hotkey", &[("hotkey", "Ctrl+A")]), "The hotkey Ctrl+A is assigned to more than one action.");
     }
 
@@ -206,7 +196,6 @@ mod tests {
         let dir = project_dir().join("Language");
         assert_eq!(Translator::load("ru", Some(&dir)).t("tray.exit"), "Выход");
         assert_eq!(Translator::load("UK", Some(&dir)).t("tray.exit"), "Вихід");
-        assert_eq!(Translator::load("uk", Some(&dir)).layout_name("uk-UA", "x"), "Українська (Україна)");
     }
 
     /// Every translation has exactly the texts of English.ini (new texts must be translated).

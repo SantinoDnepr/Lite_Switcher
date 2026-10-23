@@ -2,6 +2,13 @@
 
 Versions and changes, newest first. Every change to the project is recorded here.
 
+## 0.3.1 - 2026-10-23
+
+### Changed
+- The names of the keyboard layouts are taken from Windows again, in the language of the system
+  (e.g. `Русский (Россия)`), as before 0.3.0. They are not translated by the program, the `[layouts]`
+  groups are removed from the language files.
+
 ## 0.3.0 - 2026-10-23
 
 ### Added
@@ -10,7 +17,7 @@ Versions and changes, newest first. Every change to the project is recorded here
   and Ukrainian.
 - `Language` folder with one `.ini` file per language (`English.ini`, `Russian.ini`, `Ukrainian.ini`),
   split into groups (`[tray]`, `[tabs]`, `[buttons]`, `[common]`, `[hotkeys]`, `[troubleshooting]`,
-  `[sounds]`, `[status]`, `[layouts]`, `[app]`). The folder is searched next to the executables and in
+  `[sounds]`, `[status]`, `[app]`). The folder is searched next to the executables and in
   the parent folders (so it is found when the programs run from `target\debug`).
 - English is built into the binaries (`English.ini` is embedded at compile time) and is the fallback
   for missing texts, so the programs work even without the `Language` folder.
@@ -26,9 +33,7 @@ Versions and changes, newest first. Every change to the project is recorded here
 ### Changed
 - The tray menu item and the check box in the settings are called "auto-switching" (translated:
   "автопереключение" / "автоперемикання").
-- Keyboard layouts are shown with English names: `English (USA)`, `Russian (Russia)`,
-  `Ukrainian (Ukraine)` (translated through `[layouts]`; other layouts get the English name from
-  Windows instead of the name in the language of the system).
+- Keyboard layouts were shown with English names (`English (USA)`...); reverted in 0.3.1.
 
 ## 0.2.0 - 2026-10-23
 
