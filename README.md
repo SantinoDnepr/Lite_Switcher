@@ -16,7 +16,7 @@ variant of the same keys, and so on, back to the original. The layouts are taken
 | `Alt+Pause` | invert the case of the selected text |
 | *(not assigned)* | turn the automatic switching on / off |
 
-The tray menu has the "auto-switching" check box (automatic switching - not implemented yet) and
+The tray menu has the "Auto-switching" check box (automatic switching - not implemented yet) and
 the items "Settings..." and "Exit".
 
 ## Languages

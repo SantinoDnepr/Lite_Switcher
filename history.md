@@ -2,6 +2,13 @@
 
 Versions and changes, newest first. Every change to the project is recorded here.
 
+## 0.3.2 - 2026-10-25
+
+### Changed
+- The tray menu item is written with a capital letter: "Auto-switching" / "Автопереключение" /
+  "Автоперемикання" (hand edit of the language files, the test was updated).
+- `.gitignore`: `.mcp.json` and `.MCP` are ignored too.
+
 ## 0.3.1 - 2026-10-23
 
 ### Changed

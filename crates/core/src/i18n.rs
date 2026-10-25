@@ -169,7 +169,7 @@ mod tests {
     #[test]
     fn english_is_built_in() {
         let tr = Translator::english();
-        assert_eq!(tr.t("tray.auto_switching"), "auto-switching");
+        assert_eq!(tr.t("tray.auto_switching"), "Auto-switching");
         assert_eq!(tr.tf("status.duplicate_hotkey", &[("hotkey", "Ctrl+A")]), "The hotkey Ctrl+A is assigned to more than one action.");
     }
 
