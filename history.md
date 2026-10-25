@@ -2,6 +2,15 @@
 
 Versions and changes, newest first. Every change to the project is recorded here.
 
+## 0.3.3 - 2026-10-25
+
+### Added
+- `docs/auto-switching-architecture.md`: architecture decisions for the automatic switching (modes,
+  language packs, literary and programming detectors, data formats, speed, risks), with the
+  measurements that justify them (MCP server probes, statistics of the 1C `.bsl` corpus).
+- `docs/auto-switching-spec.md`: technical specification (requirements, config keys, data formats,
+  acceptance thresholds, stages) for the automatic switching. No program code changed.
+
 ## 0.3.2 - 2026-10-25
 
 ### Changed
