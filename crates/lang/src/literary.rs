@@ -290,6 +290,7 @@ pub(crate) mod tests {
         let ngram = train_ngram(&alphabet(words), words.iter().map(|w| (*w, training_weight(100))));
         let bytes = Words::build(words.iter().map(|w| (w.to_string(), frequency_class(100)))).unwrap();
         Arc::new(LoadedPack {
+            local: None,
             manifest,
             words: Words::from_bytes(bytes).unwrap(),
             ngram: Some(ngram),

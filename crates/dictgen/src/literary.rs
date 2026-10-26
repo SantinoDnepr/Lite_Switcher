@@ -84,6 +84,8 @@ pub fn run(args: &Args) -> Result<(), String> {
         .map(|(w, c)| (fold(w), training_weight(*c)))
         .collect();
     let ngram_bytes = train_ngram(&alphabet, training.iter().map(|(w, weight)| (w.as_str(), *weight))).to_bytes();
+    crate::check_size("words.fst", &words_bytes)?;
+    crate::check_size("ngram3.bin", &ngram_bytes)?;
     fs::write(out.join("words.fst"), &words_bytes).map_err(|e| e.to_string())?;
     fs::write(out.join("ngram3.bin"), &ngram_bytes).map_err(|e| e.to_string())?;
 

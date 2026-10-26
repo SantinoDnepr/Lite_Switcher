@@ -51,6 +51,11 @@ does not matter, and a token that is also an ordinary word of the layout you are
 unless it is a known token of the language typed in the other layout. Hybrids such as `ЕстьNull`
 keep their layout. The data are in `ProgrammingLanguagesc`.
 
+In the programming mode the dictionary of 1C is not in the repository (it is built from private code
+and from the names of the platform). Build it on your machine, see `docs/adding-a-language.md`
+(`dictgen programming`, `dictgen mcp-dump`); your own identifiers go into a local lexicon
+(`dictgen programming --local`) that is never committed.
+
 ## Language packs
 
 The automatic modes use language packs: `LiteraryLanguages\<code>\` (ordinary languages) and
@@ -61,6 +66,13 @@ Settings and a keyboard layout of its language is installed, a programming pack 
 (one at a time) and all the layouts it needs are installed. The format is described in
 `docs/auto-switching-spec.md`. For tests the folders can be taken from the folder in the environment
 variable `LITE_SWITCHER_DATA_DIR`.
+
+More about adding a language (human or programming): `docs/adding-a-language.md`.
+
+## License
+
+The code is under the MIT licence (`LICENSE`). The data files of the literary packs are under
+CC BY-SA 4.0 (`LICENSE-DATA`, sources in `NOTICE` and `docs/data-sources.md`).
 
 ## Programs
 

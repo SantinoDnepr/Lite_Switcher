@@ -151,8 +151,18 @@ pub fn evaluate(packs: &[PackInfo], installed: &[Layout], config: &Config) -> Ve
 pub struct LoadedPack {
     pub manifest: Manifest,
     pub words: Words,
+    /// The user's own words of a programming pack (`local\words.fst` next to the manifest). It is
+    /// built from the user's code, is never published and is optional: a broken file is ignored.
+    pub local: Option<Words>,
     pub ngram: Option<Ngram>,
     pub exceptions: HashSet<String>,
+}
+
+impl LoadedPack {
+    /// The value of a word in the pack, the published words first, then the local ones.
+    pub fn get(&self, word: &str) -> Option<u32> {
+        self.words.get(word).or_else(|| self.local.as_ref().and_then(|l| l.get(word)))
+    }
 }
 
 /// The data of all active packs. Only these are in memory.
@@ -203,7 +213,14 @@ pub fn load_pack(info: &PackInfo) -> Result<LoadedPack, String> {
         Some(file) => format::parse_exceptions(&String::from_utf8_lossy(&read_checked(&info.dir, m, "exceptions", file)?)),
         None => HashSet::new(),
     };
-    Ok(LoadedPack { manifest: m.clone(), words, ngram, exceptions })
+    let local = (m.kind == Kind::Programming)
+        .then(|| {
+            // read, not mapped: dictgen can then rebuild the file while the daemon runs
+            let bytes = fs::read(info.dir.join("local").join("words.fst")).ok()?;
+            Words::from_bytes(bytes).ok()
+        })
+        .flatten();
+    Ok(LoadedPack { manifest: m.clone(), words, local, ngram, exceptions })
 }
 
 /// Opens the data of the active packs; a pack that cannot be opened is skipped and reported.
@@ -397,6 +414,34 @@ mod tests {
         statuses.extend(evaluate(&found.programming, &installed, &config));
         let (loaded, _) = load(&statuses);
         assert!(loaded.programming.is_none() && !loaded.has_packs_for(lite_switcher_core::config::Mode::AutoProgramming));
+    }
+
+    #[test]
+    fn local_lexicon_is_a_layer_of_a_programming_pack() {
+        let sb = Sandbox::new();
+        let dir = sb.add_programming("1c");
+        let installed = [layout("en-US"), layout("ru-RU")];
+        let mut config = lite_switcher_core::config::Config::default();
+        config.programming_language.selected = "1c".into();
+        let load_it = || {
+            let found = sb.discover();
+            let (loaded, issues) = load(&evaluate(&found.programming, &installed, &config));
+            assert!(issues.is_empty(), "{issues:?}");
+            loaded.programming.unwrap()
+        };
+        let pack = load_it();
+        assert!(pack.local.is_none() && pack.get("своеимя").is_none() && pack.get("процедура").is_some());
+
+        fs::create_dir_all(dir.join("local")).unwrap();
+        fs::write(dir.join("local").join("words.fst"), Words::build([("своеимя".to_string(), format::flags::LOCAL)]).unwrap()).unwrap();
+        let pack = load_it();
+        assert!(pack.get("своеимя").is_some() && pack.get("процедура").is_some());
+        assert!(!pack.words.contains("своеимя"), "the published words are not changed");
+
+        // a broken local file is ignored, the pack still works
+        fs::write(dir.join("local").join("words.fst"), b"garbage").unwrap();
+        let pack = load_it();
+        assert!(pack.local.is_none() && pack.get("процедура").is_some());
     }
 
     #[test]

@@ -210,7 +210,37 @@ fn list(value: Option<&str>) -> String {
     value.unwrap_or_default().split(',').map(str::trim).filter(|v| !v.is_empty()).collect::<Vec<_>>().join(",")
 }
 
+/// The local lexicon: the frequent tokens of the user's own code, for the machine of the user only.
+/// It is a layer on top of the published pack (`local\words.fst` in the pack folder, never committed).
+fn run_local(args: &Args) -> Result<(), String> {
+    let out = PathBuf::from(args.required("out")?);
+    let dir = args.required("bsl")?;
+    let min_count: u64 = args.number("min-count", 3)?;
+    let depth: usize = args.number("project-depth", 2)?;
+    let overlap: f64 = args.number("cluster-overlap", 0.5)?;
+    let corpus = mine(Path::new(dir), depth, overlap)?;
+    let entries: Vec<(String, u32)> = corpus
+        .tokens
+        .iter()
+        .filter(|(token, (count, _))| {
+            let body = token.trim_start_matches(['#', '&']);
+            // short tokens are never replaced by the detector, so they are not stored
+            *count >= min_count && body.chars().filter(|c| is_letter(*c)).count() >= 4 && body.chars().count() <= 40
+        })
+        .map(|(token, (count, _))| (token.clone(), frequency_class(*count) | flags::LOCAL))
+        .collect();
+    fs::create_dir_all(&out).map_err(|e| format!("{}: {e}", out.display()))?;
+    let words = Words::build(entries).map_err(|e| e.to_string())?;
+    fs::write(out.join("words.fst"), &words).map_err(|e| e.to_string())?;
+    let total = Words::from_bytes(words.clone()).map_err(|e| e.to_string())?.len();
+    println!("local lexicon: {total} words from {} files, words.fst {} bytes in {}", corpus.files, words.len(), out.display());
+    Ok(())
+}
+
 pub fn run(args: &Args) -> Result<(), String> {
+    if args.flag("local") {
+        return run_local(args);
+    }
     let code = args.required("code")?;
     let name = args.required("name")?;
     let out = PathBuf::from(args.required("out")?);
@@ -232,6 +262,18 @@ pub fn run(args: &Args) -> Result<(), String> {
     let mut entries: Vec<(String, u32)> = seed.clone();
     let seed_keys: HashSet<&str> = seed.iter().map(|(w, _)| w.as_str()).collect();
     let mut mined = 0usize;
+    if let Some(path) = args.get("platform").filter(|p| !p.is_empty()) {
+        // the names of the platform (mcp-dump): they are public API names, the layer under the mined ones
+        let mut added = 0usize;
+        for name in crate::mcp::read_names(Path::new(path))? {
+            let key = name.to_lowercase();
+            if key.chars().filter(|c| is_letter(*c)).count() >= 2 && !seed_keys.contains(key.as_str()) {
+                entries.push((key, 40_000 | flags::PLATFORM));
+                added += 1;
+            }
+        }
+        println!("platform: {added} names from {path}");
+    }
     if let Some(dir) = args.get("bsl").filter(|d| !d.is_empty()) {
         let corpus = mine(Path::new(dir), depth, overlap)?;
         println!(
@@ -253,6 +295,7 @@ pub fn run(args: &Args) -> Result<(), String> {
 
     fs::create_dir_all(&out).map_err(|e| format!("{}: {e}", out.display()))?;
     let words = Words::build(entries).map_err(|e| e.to_string())?;
+    crate::check_size("words.fst", &words)?;
     fs::write(out.join("words.fst"), &words).map_err(|e| e.to_string())?;
     let manifest = format!(
         "[pack]\nkind = programming\ncode = {code}\nname = {name}\nformat = 1\nversion = 1\nlicense = {license}\nsources = {sources}\n\n\
@@ -324,5 +367,46 @@ mod tests {
         assert_eq!(corpus.tokens["своеимя1"].1, 1, "a and its copy are one group");
         assert_eq!(corpus.unique_files, 4);
         fs::remove_dir_all(&dir).unwrap();
+    }
+
+    fn run_with(extra: &[&str]) -> Result<(), String> {
+        let argv: Vec<String> = extra.iter().map(|s| s.to_string()).collect();
+        run(&Args::parse(&argv)?)
+    }
+
+    #[test]
+    fn the_public_pack_has_no_private_identifiers_and_the_local_one_has_them() {
+        let root = std::env::temp_dir().join(format!("ls-dictgen-public-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let code = root.join("code");
+        for (project, text) in [
+            ("a", "Процедура ОбщееИмя()
+СвоеИмяКомпании()
+КонецПроцедуры"),
+            ("b", "Процедура ОбщееИмя()
+КонецПроцедуры"),
+            ("c", "ОбщееИмя()"),
+        ] {
+            fs::create_dir_all(code.join(project)).unwrap();
+            fs::write(code.join(project).join("m.bsl"), text).unwrap();
+        }
+        fs::write(root.join("seed.txt"), "Процедура|Procedure|keyword
+").unwrap();
+        let path = |p: &str| root.join(p).to_string_lossy().into_owned();
+
+        run_with(&[
+            "--code", "t", "--name", "T", "--seed", &path("seed.txt"), "--out", &path("public"), "--license", "x",
+            "--sources", "x", "--bsl", &path("code"), "--min-groups", "3", "--min-count", "1", "--project-depth", "1",
+        ])
+        .unwrap();
+        let public = Words::open(&root.join("public").join("words.fst")).unwrap();
+        assert!(public.contains("общееимя") && public.contains("процедура"));
+        assert!(!public.contains("своеимякомпании"), "an identifier of one project must not be published");
+
+        run_with(&["--local", "--bsl", &path("code"), "--out", &path("local"), "--min-count", "1", "--project-depth", "1"]).unwrap();
+        let local = Words::open(&root.join("local").join("words.fst")).unwrap();
+        assert!(local.contains("своеимякомпании") && local.get("своеимякомпании").unwrap() & flags::LOCAL != 0);
+        drop((public, local));
+        fs::remove_dir_all(&root).unwrap();
     }
 }

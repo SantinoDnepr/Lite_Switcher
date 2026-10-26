@@ -10,6 +10,7 @@ mod eval;
 mod eval_programming;
 mod list;
 mod literary;
+mod mcp;
 mod programming;
 
 use std::collections::HashMap;
@@ -62,6 +63,16 @@ impl Args {
     }
 }
 
+/// A data file of a published pack stays small enough for git (a limit of the specification).
+pub const MAX_PUBLISHED_BYTES: usize = 5 * 1024 * 1024;
+
+pub fn check_size(file: &str, bytes: &[u8]) -> Result<(), String> {
+    if bytes.len() > MAX_PUBLISHED_BYTES {
+        return Err(format!("{file} is {} bytes: more than {MAX_PUBLISHED_BYTES}, raise --min-count", bytes.len()));
+    }
+    Ok(())
+}
+
 const USAGE: &str = "\
 usage:
   dictgen literary --code <code> --name <name> --freq <word-count list> --out <folder>
@@ -70,7 +81,9 @@ usage:
                    [--forbidden <bigrams,...>] [--unique <letters>] [--exceptions <file>] [--fold-yo]
   dictgen programming --code <id> --name <name> --seed <seed.txt> --out <folder> --license <license>
                       --sources <sources> [--bsl <folder with .bsl>] [--min-groups N] [--min-count N]
-                      [--project-depth N] [--cluster-overlap F] [--latin-segments <list>]
+                      [--project-depth N] [--cluster-overlap F] [--latin-segments <list>] [--platform <dump.json>]
+  dictgen programming --local --bsl <folder with your .bsl> --out <pack folder>/local [--min-count N]
+  dictgen mcp-dump --config <.mcp.json> --out <dump.json> [--server <name>] [--prefix-depth 1|2] [--max-calls N]
   dictgen eval-programming --packs <ProgrammingLanguages folder> [--code <id>] [--seed <seed.txt>]
                            [--bsl <folder with .bsl>] [--sample N] [--prose <code=word-count list,...>] [--check]
   dictgen list --pack <pack folder> [--limit N] [--prefix <text>] [--flags keyword,directive,...]
@@ -86,6 +99,7 @@ fn run() -> Result<(), String> {
         "eval" => eval::run(&args),
         "programming" => programming::run(&args),
         "list" => list::run(&args),
+        "mcp-dump" => mcp::run(&args),
         "eval-programming" => eval_programming::run(&args),
         other => Err(format!("unknown command '{other}'\n{USAGE}")),
     }

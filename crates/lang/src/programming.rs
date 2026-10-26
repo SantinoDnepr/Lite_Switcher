@@ -121,7 +121,7 @@ impl ProgrammingDetector {
     /// Is `word` in the dictionary? A word of up to three letters has to be a keyword of the language:
     /// short identifiers are everywhere ("reg", "key") and are also ordinary words of other languages.
     fn known(&self, word: &str) -> bool {
-        match self.pack.words.get(word) {
+        match self.pack.get(word) {
             Some(value) => {
                 word.chars().count() > 3 || value & (flags::KEYWORD | flags::DIRECTIVE | flags::PREPROCESSOR) != 0
             }
@@ -296,6 +296,7 @@ pub(crate) mod tests {
         words.extend(extra.iter().map(|w| (w.to_string(), 1)));
         let bytes = Words::build(words).unwrap();
         Arc::new(LoadedPack {
+            local: None,
             manifest,
             words: Words::from_bytes(bytes).unwrap(),
             ngram: None,

@@ -2,6 +2,29 @@
 
 Versions and changes, newest first. Every change to the project is recorded here.
 
+## 0.8.0 - 2026-10-26
+
+Stage 5 of the automatic switching: sources and delivery.
+
+### Added
+- `LICENSE` (MIT, code); `NOTICE` describes the data of the 1C pack. `docs/adding-a-language.md`: how to add a
+  literary or a programming language (Rust, C++ and others), with the commands of `dictgen`.
+- `dictgen mcp-dump`: reads the names of the 1C platform (types, global methods and properties, members of
+  every type) from the MCP server of `.mcp.json`; only names are saved; the result is cached in the file and a
+  second run asks only for what is missing. `dictgen programming --platform <dump.json>` adds them as a layer
+  under the mined names (flag `platform`).
+- The local lexicon: `dictgen programming --local --bsl <folder> --out <pack>/local`. A programming pack reads
+  `local\words.fst` next to the published words (read into memory, so it can be rebuilt while the daemon runs;
+  a broken file is ignored). Never committed (`.gitignore`).
+- `dictgen` refuses to write a published data file bigger than 5 MB.
+- Tests: the public pack has no identifier used by fewer than `--min-groups` independent projects, the local
+  one has it; the local layer of a pack.
+
+### Changed
+- The 1C dictionary (`words.fst`, `pack.ini`) is no longer committed: it is built from private code
+  (decision of the owner). Only `ProgrammingLanguages/1c/seed.txt` is in git; the rest is in `.gitignore`.
+- The data licence CC BY-SA 4.0 for the literary packs is accepted by the owner.
+
 ## 0.7.0 - 2026-10-26
 
 Stage 4 of the automatic switching: the programming mode (`Auto programming`, language 1C).

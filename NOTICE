@@ -7,6 +7,13 @@ The language packs in LiteraryLanguages/ contain frequency data derived from:
   OPUS). Used for the English, Russian and Ukrainian packs (the 2018 lists).
 
 The derived files (words.fst, ngram3.bin) are provided under the same licence, see LICENSE-DATA.
-The program code is licensed separately (see the license field in Cargo.toml).
+The program code is licensed under the MIT licence, see LICENSE.
+
+The programming pack of 1C (ProgrammingLanguages/1c) is not distributed with the source: its dictionary
+is built from the seed list in the repository (the syntax of the language, written for this project)
+and, on the machine of the builder, from the names of the platform API and from private code. The
+built dictionary is never committed. The seed list is under the MIT licence like the code.
+The local lexicon (ProgrammingLanguages/*/local) is made from the user's own code and is never
+committed or published.
 
 The sources and licences of every data source are described in docs/data-sources.md.
