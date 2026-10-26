@@ -2,6 +2,12 @@
 
 Versions and changes, newest first. Every change to the project is recorded here.
 
+## 0.9.3 - 2026-10-26
+
+### Changed
+- The row of tabs in Settings scrolls when the window is too narrow for all the tabs: `<` and `>` buttons
+  appear at its ends (and the mouse wheel or a drag over the row scrolls it).
+
 ## 0.9.2 - 2026-10-26
 
 ### Changed

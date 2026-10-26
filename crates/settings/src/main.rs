@@ -110,6 +110,9 @@ struct App {
     installed: Vec<layout::Layout>,
     /// The check boxes of the literary packs, in the order of `packs.literary`.
     literary_checked: Vec<bool>,
+    /// The horizontal scroll of the row of tabs, and whether the tabs do not fit in the window.
+    tab_scroll: f32,
+    tabs_overflow: bool,
 }
 
 fn daemon_exe() -> Option<PathBuf> {
@@ -138,6 +141,8 @@ impl App {
             tr,
             languages: i18n::available(),
             title_dirty: false,
+            tab_scroll: 0.0,
+            tabs_overflow: false,
             packs: Discovered::default(),
             installed: Vec::new(),
             literary_checked: Vec::new(),
@@ -537,6 +542,46 @@ impl App {
     }
 }
 
+/// How far the buttons at the ends of the row of tabs scroll it.
+const TAB_SCROLL_STEP: f32 = 120.0;
+
+impl App {
+    /// The row of tabs. When the window is too narrow for all of them it scrolls: with the mouse wheel
+    /// (over the row), by dragging, and with the `<` and `>` buttons at its ends.
+    fn tab_row(&mut self, ui: &mut egui::Ui) {
+        let overflow = self.tabs_overflow;
+        ui.horizontal(|ui| {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if overflow && ui.button(">").clicked() {
+                    self.tab_scroll += TAB_SCROLL_STEP;
+                }
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    if overflow && ui.button("<").clicked() {
+                        self.tab_scroll = (self.tab_scroll - TAB_SCROLL_STEP).max(0.0);
+                    }
+                    let out = egui::ScrollArea::horizontal()
+                        .id_salt("tabs")
+                        .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden)
+                        .horizontal_scroll_offset(self.tab_scroll)
+                        .show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.selectable_value(&mut self.tab, Tab::Common, self.tr.t("tabs.common"));
+                                ui.selectable_value(&mut self.tab, Tab::Literary, self.tr.t("tabs.literary"));
+                                ui.selectable_value(&mut self.tab, Tab::Programming, self.tr.t("tabs.programming"));
+                                ui.selectable_value(&mut self.tab, Tab::Hotkeys, self.tr.t("tabs.hotkeys"));
+                                ui.selectable_value(&mut self.tab, Tab::Troubleshooting, self.tr.t("tabs.troubleshooting"));
+                                ui.selectable_value(&mut self.tab, Tab::Sounds, self.tr.t("tabs.sounds"));
+                            });
+                        });
+                    let max = (out.content_size.x - out.inner_rect.width()).max(0.0);
+                    self.tab_scroll = out.state.unclamped_offset().x.min(max);
+                    self.tabs_overflow = max > 0.5;
+                });
+            });
+        });
+    }
+}
+
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         if self.capturing.is_some() {
@@ -564,14 +609,7 @@ impl eframe::App for App {
             ui.add_space(4.0);
         });
         egui::CentralPanel::default().show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.selectable_value(&mut self.tab, Tab::Common, self.tr.t("tabs.common"));
-                ui.selectable_value(&mut self.tab, Tab::Literary, self.tr.t("tabs.literary"));
-                ui.selectable_value(&mut self.tab, Tab::Programming, self.tr.t("tabs.programming"));
-                ui.selectable_value(&mut self.tab, Tab::Hotkeys, self.tr.t("tabs.hotkeys"));
-                ui.selectable_value(&mut self.tab, Tab::Troubleshooting, self.tr.t("tabs.troubleshooting"));
-                ui.selectable_value(&mut self.tab, Tab::Sounds, self.tr.t("tabs.sounds"));
-            });
+            self.tab_row(ui);
             ui.separator();
             egui::ScrollArea::vertical().show(ui, |ui| match self.tab {
                 Tab::Common => self.common_tab(ui),
