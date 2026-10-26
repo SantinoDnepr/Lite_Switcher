@@ -527,12 +527,6 @@ impl App {
             ui.checkbox(&mut ns.change_layout, tr.t("troubleshooting.no_switch_change_layout"));
             ui.weak(tr.t("troubleshooting.no_switch_hint"));
         });
-        ui.separator();
-        ui.horizontal(|ui| {
-            if ui.button(tr.t("buttons.open_config_folder")).clicked() {
-                let _ = Command::new("explorer").arg(Config::dir()).spawn();
-            }
-        });
     }
 
     fn sounds_tab(&mut self, ui: &mut egui::Ui) {
@@ -560,6 +554,9 @@ impl eframe::App for App {
                 }
                 if ui.button(self.tr.t("buttons.reload")).clicked() {
                     self.reload();
+                }
+                if ui.button(self.tr.t("buttons.open_config_folder")).clicked() {
+                    let _ = Command::new("explorer").arg(Config::dir()).spawn();
                 }
             });
             let args: Vec<(&str, &str)> = self.status.args.iter().map(|(n, v)| (*n, v.as_str())).collect();

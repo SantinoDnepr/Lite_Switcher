@@ -2,6 +2,12 @@
 
 Versions and changes, newest first. Every change to the project is recorded here.
 
+## 0.9.2 - 2026-10-26
+
+### Changed
+- The "Open the config folder" button moved from the Troubleshooting tab to the footer of the settings window,
+  to the right of Save and Reload.
+
 ## 0.9.1 - 2026-10-26
 
 ### Changed
