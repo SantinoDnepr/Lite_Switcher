@@ -460,7 +460,9 @@ fn track_key(s: &mut State, vk: VIRTUAL_KEY, kb: &KBDLLHOOKSTRUCT) -> bool {
             if mode == Mode::AutoProgramming
                 && (is_digit_key(&key)
                     || is_underscore_key(&key)
-                    || (s.buffer.is_empty() && engine.programming.as_ref().is_some_and(|p| p.is_sigil_key(&key)))) =>
+                    // a new word: nothing typed yet, or the previous word is over (its separator is waiting)
+                    || ((s.buffer.is_empty() || !s.buffer.trailing().is_empty())
+                        && engine.programming.as_ref().is_some_and(|p| p.is_sigil_key(&key)))) =>
         {
             note_layout(s, hkl);
             s.buffer.push_in(key, hkl);
@@ -576,10 +578,14 @@ fn on_trigger(s: &mut State, engine: &Engine, key: Option<KeyStroke>, vk: VIRTUA
     };
     // from now on the buffer is the replaced word; the hotkey continues the cycle from this layout
     match key {
-        Some(k) => s.buffer.after_auto_replacement(text.chars().count(), vec![k], seq, pos),
+        Some(k) => {
+            s.buffer.after_auto_replacement(text.chars().count(), vec![k], seq, pos);
+            s.buffer.set_start_hkl(target.hkl);
+        }
+        // after Enter the buffer is empty and must stay without a start layout: the next word may
+        // be typed in another layout, and that is not a "change layout" key
         None => s.buffer.clear(),
     }
-    s.buffer.set_start_hkl(target.hkl);
     s.prev = Some(Prev { layout_id: target.id.clone(), at: Instant::now(), hwnd });
     s.swallowed_vk = Some(u32::from(vk.0));
     auto::start(plan);

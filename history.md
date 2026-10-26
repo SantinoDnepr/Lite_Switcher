@@ -2,6 +2,19 @@
 
 Versions and changes, newest first. Every change to the project is recorded here.
 
+## 0.9.5 - 2026-10-26
+
+Live check of the automatic modes (`tools/e2e/auto-literary.ps1`: 12 scenarios, `auto-programming.ps1`: 8 scenarios,
+release daemon, isolated config) - all scenarios pass after the two fixes below.
+
+### Fixed
+- After a word was replaced on Enter, the daemon kept the layout of the replaced word as the "start layout" of the
+  next word. If the layout was changed after Enter (the usual case), the next word counted as typed with a
+  changed layout and was skipped (and in one run the hotkey that followed doubled the text).
+- In the programming mode a token that starts with `#` or `&` was not recognised when it came right after an
+  automatically replaced word (the first key was dropped): `№область` typed in the Russian layout was not repaired
+  to `#область`.
+
 ## 0.9.4 - 2026-10-26
 
 ### Fixed
