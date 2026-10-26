@@ -33,6 +33,17 @@ a language, copy `Language\English.ini`, translate the values, set `[language] c
 put the file into the folder - it shows up in the list. A test checks that all the files have the
 same keys, so every new text has to be added to all of them.
 
+## Language packs
+
+The automatic modes use language packs: `LiteraryLanguages\<code>\` (ordinary languages) and
+`ProgrammingLanguages\<id>\` (programming languages) next to the executables, each with a `pack.ini`
+and the data files it names. The programs read only the manifests at start; the data of a pack is
+opened (memory-mapped) only when the pack is active: a literary pack is active when it is checked in
+Settings and a keyboard layout of its language is installed, a programming pack when it is selected
+(one at a time) and all the layouts it needs are installed. The format is described in
+`docs/auto-switching-spec.md`. For tests the folders can be taken from the folder in the environment
+variable `LITE_SWITCHER_DATA_DIR`.
+
 ## Programs
 
 | Binary | Crate | Purpose |
@@ -40,6 +51,7 @@ same keys, so every new text has to be added to all of them.
 | `lite-switcher.exe` | `crates/daemon` | background daemon: tray icon, keyboard hook, word conversion |
 | `lite-switcher-settings.exe` | `crates/settings` | settings editor (also started from the tray menu) |
 | - | `crates/core` | shared library: config, layouts, word buffer, hotkeys, autostart |
+| - | `crates/lang` | language packs: manifests, discovery, activation, data formats, key table |
 
 ## Build and run
 

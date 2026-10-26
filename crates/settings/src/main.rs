@@ -13,10 +13,13 @@ use lite_switcher_core::config::{Config, Hotkeys, Mode};
 use lite_switcher_core::hotkey::{vk_name, Hotkey};
 use lite_switcher_core::i18n::{self, Language, Translator};
 use lite_switcher_core::{autostart, layout};
+use lite_switcher_lang::pack::{self, Discovered, PackStatus};
 
 #[derive(Clone, Copy, PartialEq)]
 enum Tab {
     Common,
+    Literary,
+    Programming,
     Hotkeys,
     Troubleshooting,
     Sounds,
@@ -101,6 +104,12 @@ struct App {
     languages: Vec<Language>,
     /// The window title has to be updated (the language changed).
     title_dirty: bool,
+    /// Language packs found next to the program (only their manifests are read).
+    packs: Discovered,
+    /// All layouts installed in Windows (a pack needs some of them).
+    installed: Vec<layout::Layout>,
+    /// The check boxes of the literary packs, in the order of `packs.literary`.
+    literary_checked: Vec<bool>,
 }
 
 fn daemon_exe() -> Option<PathBuf> {
@@ -129,9 +138,55 @@ impl App {
             tr,
             languages: i18n::available(),
             title_dirty: false,
+            packs: Discovered::default(),
+            installed: Vec::new(),
+            literary_checked: Vec::new(),
         };
         app.load_form();
+        app.load_packs();
         app
+    }
+
+    /// Reads the manifests of the language packs and the installed layouts.
+    fn load_packs(&mut self) {
+        self.packs = pack::discover();
+        self.installed = layout::enumerate();
+        self.literary_checked =
+            self.packs.literary.iter().map(|p| self.cfg.literary_language.is_enabled(&p.manifest.code)).collect();
+    }
+
+    /// The value of `[literary_language] enabled` for the check boxes: `None` (auto) when every found
+    /// pack is checked; codes of packs that are not found now stay in the list.
+    fn literary_enabled(&self) -> Option<Vec<String>> {
+        let found: Vec<&str> = self.packs.literary.iter().map(|p| p.manifest.code.as_str()).collect();
+        if found.is_empty() {
+            return self.cfg.literary_language.enabled.clone();
+        }
+        let mut list: Vec<String> = found
+            .iter()
+            .zip(&self.literary_checked)
+            .filter(|(_, checked)| **checked)
+            .map(|(code, _)| code.to_string())
+            .collect();
+        let unknown: Vec<String> = match &self.cfg.literary_language.enabled {
+            Some(saved) => saved.iter().filter(|c| !found.iter().any(|f| f.eq_ignore_ascii_case(c))).cloned().collect(),
+            None => Vec::new(),
+        };
+        if list.len() == found.len() && unknown.is_empty() {
+            return None;
+        }
+        list.extend(unknown);
+        Some(list)
+    }
+
+    /// Which packs would be active with the current state of the form.
+    fn pack_statuses(&self) -> (Vec<PackStatus>, Vec<PackStatus>) {
+        let mut cfg = self.cfg.clone();
+        cfg.literary_language.enabled = self.literary_enabled();
+        (
+            pack::evaluate(&self.packs.literary, &self.installed, &cfg),
+            pack::evaluate(&self.packs.programming, &self.installed, &cfg),
+        )
     }
 
     fn set_status(&mut self, key: &'static str, args: &[(&'static str, String)]) {
@@ -182,6 +237,7 @@ impl App {
 
     /// Copies the form state back to `self.cfg`.
     fn store_form(&mut self) {
+        self.cfg.literary_language.enabled = self.literary_enabled();
         let common = &mut self.cfg.common;
         if self.auto_layouts {
             common.layouts = Vec::new();
@@ -256,6 +312,7 @@ impl App {
             Ok(cfg) => {
                 self.cfg = cfg;
                 self.load_form();
+                self.load_packs();
                 self.apply_language();
                 self.set_status("status.reloaded", &[]);
             }
@@ -328,8 +385,13 @@ impl App {
                     }
                 });
         });
-        if self.cfg.common.mode.is_auto() {
-            // no language packs exist yet: an automatic mode works as manual
+        let (literary, programming) = self.pack_statuses();
+        let has_active_pack = match self.cfg.common.mode {
+            Mode::Manual => true,
+            Mode::AutoLiterary => literary.iter().any(|s| s.active),
+            Mode::AutoProgramming => programming.iter().any(|s| s.active),
+        };
+        if !has_active_pack {
             ui.weak(tr.t("common.mode_hint_no_packs"));
         }
         ui.checkbox(&mut self.cfg.common.autostart, tr.t("common.autostart"));
@@ -355,6 +417,50 @@ impl App {
         });
         if language_changed {
             self.apply_language();
+        }
+    }
+
+    fn literary_tab(&mut self, ui: &mut egui::Ui) {
+        let (statuses, _) = self.pack_statuses();
+        let tr = &self.tr;
+        ui.heading(tr.t("literary.heading"));
+        let active = statuses.iter().filter(|s| s.active).count();
+        ui.label(tr.tf("literary.summary", &[("found", &statuses.len().to_string()), ("active", &active.to_string())]));
+        ui.weak(tr.t("literary.hint"));
+        ui.add_space(4.0);
+        for (checked, status) in self.literary_checked.iter_mut().zip(&statuses) {
+            ui.horizontal(|ui| {
+                ui.checkbox(checked, "");
+                let m = &status.info.manifest;
+                let label = format!("{} ({})", m.name, m.code);
+                if status.enabled && !status.missing_layouts.is_empty() {
+                    ui.weak(label);
+                    ui.weak(format!("- {}", tr.t("packs.layout_missing")));
+                } else {
+                    ui.label(label);
+                }
+            });
+        }
+    }
+
+    fn programming_tab(&mut self, ui: &mut egui::Ui) {
+        let (_, statuses) = self.pack_statuses();
+        let tr = &self.tr;
+        ui.heading(tr.t("programming.heading"));
+        ui.weak(tr.t("programming.hint"));
+        ui.add_space(4.0);
+        if self.packs.programming.is_empty() {
+            ui.label(tr.t("programming.none_found"));
+        }
+        for status in &statuses {
+            let m = &status.info.manifest;
+            ui.horizontal(|ui| {
+                ui.radio_value(&mut self.cfg.programming_language.selected, m.code.clone(), format!("{} ({})", m.name, m.code));
+                ui.weak(tr.tf("packs.requires", &[("layouts", &m.layout_require.join(", "))]));
+                if status.enabled && !status.missing_layouts.is_empty() {
+                    ui.weak(format!("- {}", tr.t("packs.layout_missing")));
+                }
+            });
         }
     }
 
@@ -463,6 +569,8 @@ impl eframe::App for App {
         egui::CentralPanel::default().show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.selectable_value(&mut self.tab, Tab::Common, self.tr.t("tabs.common"));
+                ui.selectable_value(&mut self.tab, Tab::Literary, self.tr.t("tabs.literary"));
+                ui.selectable_value(&mut self.tab, Tab::Programming, self.tr.t("tabs.programming"));
                 ui.selectable_value(&mut self.tab, Tab::Hotkeys, self.tr.t("tabs.hotkeys"));
                 ui.selectable_value(&mut self.tab, Tab::Troubleshooting, self.tr.t("tabs.troubleshooting"));
                 ui.selectable_value(&mut self.tab, Tab::Sounds, self.tr.t("tabs.sounds"));
@@ -470,6 +578,8 @@ impl eframe::App for App {
             ui.separator();
             egui::ScrollArea::vertical().show(ui, |ui| match self.tab {
                 Tab::Common => self.common_tab(ui),
+                Tab::Literary => self.literary_tab(ui),
+                Tab::Programming => self.programming_tab(ui),
                 Tab::Hotkeys => self.hotkeys_tab(ui),
                 Tab::Troubleshooting => self.troubleshooting_tab(ui),
                 Tab::Sounds => self.sounds_tab(ui),

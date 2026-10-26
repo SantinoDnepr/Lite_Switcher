@@ -113,6 +113,17 @@ impl Tray {
         let _ = self.icon.set_tooltip(Some(tr.t("tray.tooltip")));
     }
 
+    /// Tooltip of the icon; with `no_packs` it also says that the selected automatic mode has no
+    /// active language pack and works as manual.
+    pub fn set_hint(&self, tr: &Translator, no_packs: bool) {
+        let tooltip = if no_packs {
+            format!("{}\n{}", tr.t("tray.tooltip"), tr.t("common.mode_hint_no_packs"))
+        } else {
+            tr.t("tray.tooltip").to_string()
+        };
+        let _ = self.icon.set_tooltip(Some(tooltip));
+    }
+
     /// Puts the check mark on the item of the current mode (and only on it).
     pub fn refresh(&self, mode: Mode) {
         for (item, m) in self.mode_items.iter().zip(MENU_MODES) {

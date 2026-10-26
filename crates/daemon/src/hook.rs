@@ -28,6 +28,8 @@ use crate::selection::{self, Kind};
 
 /// Posted to the main thread when a hotkey is pressed; `wParam` is the `Action`.
 pub const WM_ACTION: u32 = WM_APP + 1;
+/// Posted to the main thread when the language packs have been (re)loaded.
+pub const WM_PACKS_LOADED: u32 = WM_APP + 2;
 
 static MAIN_THREAD: AtomicU32 = AtomicU32::new(0);
 
@@ -162,6 +164,13 @@ pub fn current_mode() -> Mode {
 pub fn post_action(action: Action) {
     unsafe {
         let _ = PostThreadMessageW(MAIN_THREAD.load(Ordering::Relaxed), WM_ACTION, WPARAM(action as usize), LPARAM(0));
+    }
+}
+
+/// Posts a message without parameters to the main thread (callable from any thread).
+pub fn post_message(message: u32) {
+    unsafe {
+        let _ = PostThreadMessageW(MAIN_THREAD.load(Ordering::Relaxed), message, WPARAM(0), LPARAM(0));
     }
 }
 

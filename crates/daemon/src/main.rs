@@ -1,6 +1,7 @@
 #![windows_subsystem = "windows"]
 
 mod clip;
+mod engine;
 mod hook;
 mod inject;
 mod selection;
@@ -18,6 +19,13 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 use lite_switcher_core::{autostart, config::Config, i18n::Translator};
+
+/// Shows the check mark, the language and the "no packs" hint of the tray menu for the config.
+fn refresh_tray(tray: &tray::Tray, tr: &Translator) {
+    let mode = hook::current_mode();
+    tray.refresh(mode);
+    tray.set_hint(tr, mode.is_auto() && !engine::loaded().has_packs_for(mode));
+}
 
 const CONFIG_POLL_MS: u32 = 1000;
 
@@ -75,6 +83,7 @@ fn main() {
     tracing::info!("lite-switcher started");
     sync_autostart(&config);
     hook::set_config(config.clone());
+    engine::reload(&config);
 
     let _hooks = match hook::install() {
         Ok(h) => h,
@@ -83,7 +92,8 @@ fn main() {
             return;
         }
     };
-    let tray = match tray::Tray::new(config.common.mode, &Translator::new(&config.common.language)) {
+    let mut translator = Translator::new(&config.common.language);
+    let tray = match tray::Tray::new(config.common.mode, &translator) {
         Ok(t) => Some(t),
         Err(e) => {
             tracing::warn!("tray icon: {e}");
@@ -104,9 +114,13 @@ fn main() {
                 if let Some(action) = hook::Action::from_wparam(msg.wParam.0) {
                     if hook::handle_action(action) {
                         if let Some(t) = &tray {
-                            t.refresh(hook::current_mode());
+                            refresh_tray(t, &translator);
                         }
                     }
+                }
+            } else if msg.message == hook::WM_PACKS_LOADED {
+                if let Some(t) = &tray {
+                    refresh_tray(t, &translator);
                 }
             } else if msg.message == WM_TIMER && msg.hwnd.0.is_null() && msg.wParam.0 == timer {
                 let mtime = config_mtime();
@@ -116,12 +130,14 @@ fn main() {
                         Ok(cfg) => {
                             tracing::info!("config reloaded");
                             sync_autostart(&cfg);
+                            translator = Translator::new(&cfg.common.language);
+                            hook::set_config(cfg.clone());
+                            engine::reload(&cfg);
                             if let Some(t) = &tray {
                                 t.set_visible(cfg.common.show_tray_icon);
-                                t.refresh(cfg.common.mode);
-                                t.apply_language(&Translator::new(&cfg.common.language));
+                                t.apply_language(&translator);
+                                refresh_tray(t, &translator);
                             }
-                            hook::set_config(cfg);
                         }
                         Err(e) => tracing::warn!("config reload failed, keeping the old one: {e}"),
                     }

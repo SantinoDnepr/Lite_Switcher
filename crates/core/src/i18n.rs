@@ -56,8 +56,7 @@ pub struct Language {
 /// The `Language` folder: next to the executable or in one of the parent folders (so that it is
 /// found in the project when the programs are run from `target\debug`).
 pub fn language_dir() -> Option<PathBuf> {
-    let exe = std::env::current_exe().ok()?;
-    exe.parent()?.ancestors().take(5).map(|dir| dir.join("Language")).find(|dir| dir.is_dir())
+    crate::paths::find_dir("Language")
 }
 
 /// Files of `dir` that look like translations: (code, name, entries).

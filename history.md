@@ -2,6 +2,28 @@
 
 Versions and changes, newest first. Every change to the project is recorded here.
 
+## 0.5.0 - 2026-10-26
+
+Stage 2 of the automatic switching: the infrastructure of the language packs. There are no packs yet,
+so the automatic modes still work as manual.
+
+### Added
+- New crate `lite-switcher-lang` (no WinAPI): the manifest `pack.ini` with validation (required fields,
+  the code must match the folder name, supported data format, file names cannot leave the pack
+  folder), discovery of the packs in `LiteraryLanguages` and `ProgrammingLanguages` (only manifests
+  are read; broken packs are skipped and reported), activation rules, opening of the data (`words.fst`
+  through memory mapping, `ngram3.bin`, `exceptions.txt`) with SHA-256 checks, and the key rendering
+  table with key classes (letter / separator / ambiguous) that replaces the slow `ToUnicodeEx`.
+- Daemon: packs are found and the data of the active ones is opened in a background thread whenever
+  the config changes; the finished set replaces the old one atomically, the data of packs that are no
+  longer active is released. If the selected automatic mode has no active pack, the tray tooltip says
+  that it works as manual.
+- Settings: tabs "Literary language" (check boxes, "Found N, active M", a note for packs without an
+  installed layout) and "Programming language" (radio buttons, one language); the hint in Common is
+  shown only when the selected mode has no active pack. The check boxes are stored in
+  `[literary_language] enabled` (`auto` when all found packs are checked).
+- `LITE_SWITCHER_DATA_DIR` environment variable: look for the data folders only there (tests).
+
 ## 0.4.0 - 2026-10-26
 
 Stage 1 of the automatic switching (`docs/auto-switching-spec.md`): modes and the Troubleshooting key
