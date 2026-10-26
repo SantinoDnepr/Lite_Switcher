@@ -1579,7 +1579,7 @@ checksum = "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
 
 [[package]]
 name = "lite-switcher"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "lite-switcher-core",
  "lite-switcher-lang",
@@ -1591,7 +1591,7 @@ dependencies = [
 
 [[package]]
 name = "lite-switcher-core"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "rust-ini",
  "windows",
@@ -1600,7 +1600,7 @@ dependencies = [
 
 [[package]]
 name = "lite-switcher-dictgen"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "lite-switcher-core",
  "lite-switcher-lang",
@@ -1609,7 +1609,7 @@ dependencies = [
 
 [[package]]
 name = "lite-switcher-lang"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "criterion",
  "fst",
@@ -1621,7 +1621,7 @@ dependencies = [
 
 [[package]]
 name = "lite-switcher-settings"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "eframe",
  "lite-switcher-core",

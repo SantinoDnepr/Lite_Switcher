@@ -2,6 +2,16 @@
 
 Versions and changes, newest first. Every change to the project is recorded here.
 
+## 0.9.1 - 2026-10-26
+
+### Changed
+- `mcp-dump` restarts the platform server when it dies on a query and skips that query; the crawl of the
+  1C platform is complete: 1204 types, 447 methods, 86 properties, 3741 members (5,298 distinct names).
+- The local 1C pack was rebuilt with the platform layer (11,762 words: 256 seed, 5,298 platform, 7,502 mined).
+  Measured: seed 1464 of 1464, replay of 1,000,000 tokens of real code 1 text change (0.0001%, same as
+  before), 60,000 ordinary words 0 changed, about 22 us per decision. The thresholds are met.
+- The release script was run: `dist\Lite_Switcher-0.9.0.zip` has no programming packs (no `-WithProgramming`).
+
 ## 0.9.0 - 2026-10-26
 
 Stage 6 of the automatic switching: hardening and delivery.
