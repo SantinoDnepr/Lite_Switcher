@@ -2,6 +2,27 @@
 
 Versions and changes, newest first. Every change to the project is recorded here.
 
+## 0.9.0 - 2026-10-26
+
+Stage 6 of the automatic switching: hardening and delivery.
+
+### Added
+- The automatic modes do nothing when the focus is in a standard password field (an edit control with
+  the password style); a scenario in `tools/e2e/auto-literary.ps1` checks it. Fields drawn by applications
+  themselves cannot be recognised (README, Limitations).
+- Benchmarks (`cargo bench -p lite-switcher-lang`, criterion) and `docs/benchmarks.md`: literary decisions
+  1-13 us, 1C decisions 12-170 us (6 to 40 keys), the key table 22 ns per 6 keys, pack discovery 0.7 ms,
+  opening a pack 2.6 ms, the data of all packs 1.5 MB (NFR-1...NFR-4 met).
+- `tools/release.ps1`: release build into `dist\Lite_Switcher-<version>` and a zip with the programs, `Language`,
+  the packs, licences and docs; the programming packs only with `-WithProgramming`, never the local lexicon.
+- `mcp-dump` skips a query that the server does not answer in 60 seconds (the server of the platform
+  hangs on some queries) and stops, with the cache saved, after three such queries in a row.
+
+### Changed
+- The 1C detector renders the keys of a token once per layout instead of for every reading: 24 keys 113 -> 77 us,
+  40 keys 265 -> 170 us.
+- Logging was checked: the log has layout ids, lengths, reasons and times, never typed words (README).
+
 ## 0.8.0 - 2026-10-26
 
 Stage 5 of the automatic switching: sources and delivery.

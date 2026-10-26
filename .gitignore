@@ -9,3 +9,4 @@ ProgrammingLanguages/*/local/
 ProgrammingLanguages/1c/*
 !ProgrammingLanguages/1c/seed.txt
 /logs
+/dist

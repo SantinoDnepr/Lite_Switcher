@@ -5,7 +5,7 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 
-use windows::Win32::Foundation::{HINSTANCE, LPARAM, LRESULT, WPARAM};
+use windows::Win32::Foundation::{HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
@@ -485,6 +485,11 @@ fn on_trigger(s: &mut State, engine: &Engine, key: Option<KeyStroke>, vk: VIRTUA
         return false;
     }
     note_layout(s, hkl);
+    if inject::focus_is_password(HWND(hwnd as *mut _)) {
+        tracing::debug!("auto: skipped, the focus is in a password field");
+        end_word(s, key);
+        return false;
+    }
     if s.buffer.is_tainted() {
         tracing::debug!("auto: skipped, an unwanted key was pressed (taint {:#b})", s.buffer.taint_bits());
         end_word(s, key);

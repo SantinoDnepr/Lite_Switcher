@@ -174,9 +174,14 @@ impl ProgrammingDetector {
         let min_len = self.pack.manifest.programming.min_token_len;
         let strips: Vec<(usize, usize)> = (0..=trail_max).map(|t| (0, t)).filter(|(_, t)| n - t >= min_len).collect();
 
+        // every key in every layout of the language, looked up once (a reading is built many times)
+        let rendered: Vec<Vec<Option<char>>> = (0..table.layout_ids().len())
+            .map(|l| if self.layouts.contains(&l) || l == ctx.current { keys.iter().map(|k| table.render(k, l)).collect() } else { Vec::new() })
+            .collect();
+
         // 1. the token in the current layout
         for &(lead, trail) in &strips {
-            if let Some(reading) = self.reading(table, keys, lead, trail, &[(ctx.current, 0)]) {
+            if let Some(reading) = self.reading(&rendered, n, lead, trail, &[(ctx.current, 0)]) {
                 if self.recognize(&reading.core).is_some() {
                     return Verdict::Keep(KeepReason::Dictionary);
                 }
@@ -199,7 +204,7 @@ impl ProgrammingDetector {
                     // `a` for the first part of the core, `b` for the rest; a == b is the whole word
                     for split in if a == b { vec![0] } else { (1..core).collect() } {
                         let plan = [(a, 0), (b, split)];
-                        let Some(reading) = self.reading(table, keys, lead, trail, &plan) else { continue };
+                        let Some(reading) = self.reading(&rendered, n, lead, trail, &plan) else { continue };
                         if let Some(kind) = self.recognize(&reading.core) {
                             found.push(Found {
                                 text: reading.text,
@@ -244,22 +249,22 @@ impl ProgrammingDetector {
     /// Returns the readings; `None` if a key types nothing, or a stripped key is a letter.
     fn reading(
         &self,
-        table: &RenderTable,
-        keys: &[KeyStroke],
+        rendered: &[Vec<Option<char>>],
+        n: usize,
         lead: usize,
         trail: usize,
         plan: &[(usize, usize)],
     ) -> Option<Reading> {
-        let n = keys.len();
         let end = n - trail;
         let layout_of = |core_index: usize| plan.iter().rev().find(|(_, from)| core_index >= *from).map_or(plan[0].0, |p| p.0);
-        let mut text = String::new();
-        let mut core = String::new();
+        let mut text = String::with_capacity(n * 2);
+        let mut core = String::with_capacity(n * 2);
         let mut letter_layouts: Vec<usize> = Vec::new();
-        for (i, key) in keys.iter().enumerate() {
+        #[allow(clippy::needless_range_loop)] // the layout depends on the index
+        for i in 0..n {
             let in_core = i >= lead && i < end;
             let layout = if in_core { layout_of(i - lead) } else if i < lead { layout_of(0) } else { layout_of(end - lead - 1) };
-            let c = table.render(key, layout)?;
+            let c = rendered[layout][i]?;
             if !in_core && c.is_alphabetic() {
                 return None;
             }

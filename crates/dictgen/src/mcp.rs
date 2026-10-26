@@ -9,7 +9,9 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::process::{Child, ChildStdin, Command, Stdio};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+use std::time::Duration;
 
 use serde_json::{json, Value};
 
@@ -19,11 +21,16 @@ const LETTERS: &str = "абвгдежзийклмнопрстуфхцчшщэю�
 /// The kinds of the search: `type`, `method` and `property` of the server.
 const KINDS: [&str; 3] = ["type", "method", "property"];
 const SAVE_EVERY: usize = 100;
+/// A call that is not answered in this time is skipped (the server of the platform sometimes hangs on a query).
+const CALL_TIMEOUT: Duration = Duration::from_secs(60);
+/// The run stops (the cache is saved) after this many calls in a row without an answer.
+const MAX_SILENT_CALLS: usize = 3;
+const TIMED_OUT: &str = "timed out";
 
 struct Server {
     child: Child,
     input: ChildStdin,
-    output: BufReader<ChildStdout>,
+    lines: Receiver<String>,
     next_id: u64,
 }
 
@@ -51,7 +58,16 @@ impl Server {
         let mut child = cmd.spawn().map_err(|e| format!("cannot start '{command}': {e}"))?;
         let input = child.stdin.take().ok_or("no stdin")?;
         let output = BufReader::new(child.stdout.take().ok_or("no stdout")?);
-        let mut server = Server { child, input, output, next_id: 1 };
+        // the lines are read in a thread so that a hung server cannot hang this program
+        let (sender, lines) = mpsc::channel();
+        std::thread::spawn(move || {
+            for line in output.lines().map_while(Result::ok) {
+                if sender.send(line).is_err() {
+                    break;
+                }
+            }
+        });
+        let mut server = Server { child, input, lines, next_id: 1 };
         server.request(
             "initialize",
             json!({"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "dictgen", "version": "1"}}),
@@ -69,10 +85,11 @@ impl Server {
         self.next_id += 1;
         self.send(&json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}))?;
         loop {
-            let mut line = String::new();
-            if self.output.read_line(&mut line).map_err(|e| e.to_string())? == 0 {
-                return Err("the server closed the connection".into());
-            }
+            let line = match self.lines.recv_timeout(CALL_TIMEOUT) {
+                Ok(line) => line,
+                Err(RecvTimeoutError::Timeout) => return Err(format!("{method}: {TIMED_OUT}")),
+                Err(RecvTimeoutError::Disconnected) => return Err("the server closed the connection".into()),
+            };
             let Ok(reply) = serde_json::from_str::<Value>(line.trim()) else { continue };
             if reply["id"] != json!(id) {
                 continue;
@@ -195,6 +212,31 @@ pub fn run(args: &Args) -> Result<(), String> {
     }
 
     let mut calls = 0usize;
+    let mut silent = 0usize;
+    // asks the server; a query that gets no answer (a hang, or the server dies on it) is skipped
+    // and the server is started again; `None` is a skipped query
+    let mut ask = |server: &mut Server, dump: &Dump, tool: &str, arguments: Value| -> Result<Option<String>, String> {
+        match server.tool(tool, arguments) {
+            Ok(reply) => {
+                silent = 0;
+                Ok(Some(reply))
+            }
+            Err(e) if e.ends_with(TIMED_OUT) || e.contains("closed the connection") || e.contains("is gone") => {
+                silent += 1;
+                println!("no answer to {tool} ({silent} in a row), skipped");
+                if silent >= MAX_SILENT_CALLS {
+                    dump.save(&out)?;
+                    return Err("the server does not answer; the names found so far are saved, run again later".into());
+                }
+                *server = Server::start(&config, args.get("server"))?;
+                Ok(None)
+            }
+            Err(e) => {
+                dump.save(&out)?;
+                Err(e)
+            }
+        }
+    };
     'search: for prefix in &prefixes {
         for kind in KINDS {
             let key = format!("{kind}:{prefix}");
@@ -204,10 +246,11 @@ pub fn run(args: &Args) -> Result<(), String> {
             if calls >= budget {
                 break 'search;
             }
-            let reply = server.tool("search", json!({"query": prefix, "type": kind, "limit": 50}))?;
-            dump.set(kind).extend(names(&reply));
-            dump.done_queries.insert(key);
             calls += 1;
+            if let Some(reply) = ask(&mut server, &dump, "search", json!({"query": prefix, "type": kind, "limit": 50}))? {
+                dump.set(kind).extend(names(&reply));
+            }
+            dump.done_queries.insert(key);
             if calls.is_multiple_of(SAVE_EVERY) {
                 dump.save(&out)?;
                 println!("{calls} calls, {} names", dump.total());
@@ -219,10 +262,11 @@ pub fn run(args: &Args) -> Result<(), String> {
         if calls >= budget {
             break;
         }
-        let reply = server.tool("getMembers", json!({"typeName": name}))?;
-        dump.members.extend(names(&reply));
-        dump.done_types.insert(name);
         calls += 1;
+        if let Some(reply) = ask(&mut server, &dump, "getMembers", json!({"typeName": name}))? {
+            dump.members.extend(names(&reply));
+        }
+        dump.done_types.insert(name);
         if calls.is_multiple_of(SAVE_EVERY) {
             dump.save(&out)?;
             println!("{calls} calls, {} names", dump.total());

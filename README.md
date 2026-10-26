@@ -90,7 +90,12 @@ cargo build --release
 target\release\lite-switcher.exe            # daemon (put the settings exe next to it)
 target\release\lite-switcher-settings.exe   # settings
 cargo test --workspace
+cargo bench -p lite-switcher-lang           # timing of the detectors, see docs/benchmarks.md
 ```
+
+A release folder and zip (programs, `Language`, the packs, licences, docs) is made by
+`pwsh -File tools\release.ps1` into `dist\`; add `-WithProgramming` to include the programming packs
+you have built (the local lexicon is never included).
 
 ## Config
 
@@ -103,7 +108,8 @@ about once a second after it changes; only `log_enabled` needs a restart.
 The daemon records the *physical keys* (scancodes) of the current word via a low-level keyboard hook.
 On the hotkey it erases the word with Backspace, switches the layout of the active window and types
 the same keys rendered in the target layout as Unicode (the word conversion does not use the clipboard). The text typed is
-never logged.
+never logged. In the automatic modes the log (`log_level = debug`) has the decision, the reason and the
+time of it, never the words.
 
 ## Limitations
 
@@ -113,6 +119,9 @@ never logged.
 - The selection actions copy and paste through the clipboard (Ctrl+C / Ctrl+V); the clipboard is
   restored, but applications that read it slowly may paste late.
 - Punctuation keys that are letters in another layout (`,` -> `б`) are part of the word.
+- The automatic modes do nothing in a standard password field (an edit control with the password style).
+  Fields that an application draws itself (browsers, many modern toolkits) cannot be recognised, so
+  switch to `Manual` before typing a password there.
 - If the tray icon is hidden (`show_tray_icon = false`), stop the daemon from Task Manager.
 
 Status: early development.

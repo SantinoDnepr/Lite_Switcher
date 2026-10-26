@@ -70,6 +70,9 @@ try {
   Scenario 'i. two words in a row' 'en-US' { TypeText 'ghbdtn ghbdtn ' }
   Scenario 'j. arrows in the word (no auto)' 'en-US' { TypeText 'ghb'; KeyDownUp 0x25 0x4B; KeyDownUp 0x27 0x4D; TypeText 'dtn ' }
   Scenario 'k. fast typing, next word at once' 'en-US' { TypeText 'ghbdtn vfvf' }
+  # an edit control with ES_PASSWORD (a multiline box has no password style, so it is a single line here)
+  Scenario 'l. password field (no auto)' 'en-US' { $tb.Multiline = $false; $tb.UseSystemPasswordChar = $true; $tb.Focus() | Out-Null; Pump 300; TypeText 'ghbdtn ' }
+  $tb.UseSystemPasswordChar = $false; $tb.Multiline = $true
 } finally {
   $form.Close()
   Stop-Process -Id $daemon.Id -Force -ErrorAction SilentlyContinue

@@ -16,8 +16,8 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
     VK_CONTROL, VK_LEFT, VK_LWIN, VK_MENU, VK_RETURN, VK_RWIN, VK_SHIFT,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetForegroundWindow, GetGUIThreadInfo, GetWindowThreadProcessId, PostMessageW, GUITHREADINFO,
-    WM_INPUTLANGCHANGEREQUEST,
+    GetClassNameW, GetForegroundWindow, GetGUIThreadInfo, GetWindowLongPtrW, GetWindowThreadProcessId, PostMessageW,
+    GUITHREADINFO, GWL_STYLE, WM_INPUTLANGCHANGEREQUEST,
 };
 
 use lite_switcher_core::hotkey::Hotkey;
@@ -47,6 +47,23 @@ pub fn focus_window(hwnd: HWND) -> HWND {
         } else {
             hwnd
         }
+    }
+}
+
+/// The style bit of an edit control that hides what is typed.
+const ES_PASSWORD: isize = 0x20;
+
+/// Is the focus in a standard password field (an edit control with `ES_PASSWORD`)? The text of such a
+/// field must never be looked at or replaced. Fields drawn by an application itself (browsers, many
+/// modern toolkits) cannot be recognised this way.
+pub fn focus_is_password(hwnd: HWND) -> bool {
+    unsafe {
+        let focus = focus_window(hwnd);
+        let mut class = [0u16; 64];
+        let len = GetClassNameW(focus, &mut class).max(0) as usize;
+        let class = String::from_utf16_lossy(&class[..len]).to_ascii_lowercase();
+        // the style bit means something else in other classes
+        (class == "edit" || class.starts_with("richedit") || class.contains(".edit.")) && GetWindowLongPtrW(focus, GWL_STYLE) & ES_PASSWORD != 0
     }
 }
 
