@@ -6,4 +6,5 @@ pub mod format;
 pub mod literary;
 pub mod manifest;
 pub mod pack;
+pub mod programming;
 pub mod render;

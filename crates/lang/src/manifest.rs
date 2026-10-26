@@ -82,13 +82,27 @@ impl Default for LiteraryParams {
 }
 
 /// Parameters of the programming language detector.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProgrammingParams {
     pub case_sensitive: bool,
+    /// Tokens with fewer keys are never converted.
+    pub min_token_len: usize,
     pub sigils: Vec<String>,
     pub latin_segments: Vec<String>,
     /// Extra separator characters (besides the ones that are the same in every layout).
     pub separators: String,
+}
+
+impl Default for ProgrammingParams {
+    fn default() -> Self {
+        ProgrammingParams {
+            case_sensitive: false,
+            min_token_len: 3,
+            sigils: Vec::new(),
+            latin_segments: Vec::new(),
+            separators: String::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -225,6 +239,9 @@ impl Manifest {
         let mut programming = ProgrammingParams::default();
         if let Some(v) = get("programming", "case_sensitive").and_then(parse_bool) {
             programming.case_sensitive = v;
+        }
+        if let Some(v) = get("programming", "min_token_len").and_then(|v| v.parse().ok()) {
+            programming.min_token_len = v;
         }
         if let Some(v) = get("programming", "sigils") {
             programming.sigils = list(v);

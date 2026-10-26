@@ -33,8 +33,8 @@ pub struct Plan {
     pub text: String,
     /// The word was ended with Enter: press it after the text.
     pub enter: bool,
-    /// Raw HKL of the layout to switch the window to.
-    pub target_hkl: isize,
+    /// Raw HKL of the layout to switch the window to; `None` = keep the layout of the window.
+    pub target_hkl: Option<isize>,
     pub key_delay_ms: u32,
     /// Sound to play after the replacement (empty path = the system sound).
     pub sound: Option<String>,
@@ -112,15 +112,19 @@ pub fn run() {
     if let Some(plan) = plan {
         let hwnd = HWND(plan.hwnd as *mut c_void);
         inject::send_backspaces(plan.backspaces, plan.key_delay_ms);
-        inject::switch_layout(hwnd, plan.target_hkl);
+        if let Some(target) = plan.target_hkl {
+            inject::switch_layout(hwnd, target);
+        }
         inject::send_text(&plan.text, plan.key_delay_ms);
         if plan.enter {
             inject::send_enter();
         }
         // the window takes the new layout asynchronously: the keys typed next must see it
-        let started = Instant::now();
-        while inject::window_hkl(hwnd) != plan.target_hkl && started.elapsed() < LAYOUT_WAIT {
-            sleep(Duration::from_millis(2));
+        if let Some(target) = plan.target_hkl {
+            let started = Instant::now();
+            while inject::window_hkl(hwnd) != target && started.elapsed() < LAYOUT_WAIT {
+                sleep(Duration::from_millis(2));
+            }
         }
         if let Some(wav) = &plan.sound {
             inject::play_sound(wav);

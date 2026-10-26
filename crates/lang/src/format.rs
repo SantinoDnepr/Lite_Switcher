@@ -123,6 +123,17 @@ impl Words {
         self.map.len()
     }
 
+    /// All entries in the order of the keys (for the tools; the program never lists the dictionary).
+    pub fn entries(&self) -> Vec<(String, u32)> {
+        use fst::{IntoStreamer, Streamer};
+        let mut stream = self.map.stream().into_stream();
+        let mut out = Vec::with_capacity(self.map.len());
+        while let Some((key, value)) = stream.next() {
+            out.push((String::from_utf8_lossy(key).into_owned(), value as u32));
+        }
+        out
+    }
+
     pub fn is_empty(&self) -> bool {
         self.map.is_empty()
     }

@@ -45,6 +45,12 @@ abbreviations in capitals, words with digits, ignored applications and words tha
 current layout. The data are the packs in `LiteraryLanguages` (English, Russian, Ukrainian, built
 from frequency lists with `dictgen`, see `NOTICE`).
 
+In the `Auto programming` mode the same happens with the tokens of the selected programming language
+(1C: keywords, directives, `#Область`, `&НаСервере`, platform names). Only a dictionary is used, case
+does not matter, and a token that is also an ordinary word of the layout you are in is left alone
+unless it is a known token of the language typed in the other layout. Hybrids such as `ЕстьNull`
+keep their layout. The data are in `ProgrammingLanguagesc`.
+
 ## Language packs
 
 The automatic modes use language packs: `LiteraryLanguages\<code>\` (ordinary languages) and

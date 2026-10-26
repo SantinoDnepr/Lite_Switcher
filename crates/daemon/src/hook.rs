@@ -23,7 +23,8 @@ use lite_switcher_core::config::{Config, Hotkeys, Mode};
 use lite_switcher_core::hotkey::Hotkey;
 use lite_switcher_core::layout::{self, key_to_char, Layout};
 use lite_switcher_core::word::{taint, KeyStroke, WordBuffer};
-use lite_switcher_lang::literary::{Context, KeepReason, Verdict};
+use lite_switcher_lang::literary::{self, Context};
+use lite_switcher_lang::programming;
 use lite_switcher_lang::render::{KeyClass, KeyRenderer};
 
 use crate::engine::{self, Engine};
@@ -168,11 +169,7 @@ pub fn set_config(config: Config) {
 }
 
 fn log_mode(mode: Mode) {
-    if mode == Mode::AutoProgramming {
-        tracing::info!("mode = {} (not implemented yet: works as manual)", mode.as_str());
-    } else {
-        tracing::info!("mode = {}", mode.as_str());
-    }
+    tracing::info!("mode = {}", mode.as_str());
 }
 
 /// The current switching mode.
@@ -337,6 +334,23 @@ fn is_digit_key(key: &KeyStroke) -> bool {
     !key.shift && (0x02..=0x0B).contains(&key.scancode)
 }
 
+/// Shift + the key of the minus: `_`, part of an identifier.
+fn is_underscore_key(key: &KeyStroke) -> bool {
+    key.shift && key.scancode == 0x0C
+}
+
+/// What the detector of the current mode says about the word.
+enum Decision {
+    Keep(String),
+    Replace {
+        /// The word in the right layout (with the punctuation around it).
+        text: String,
+        /// The layout to switch to; `None` = keep the layout of the window.
+        layout: Option<usize>,
+        info: String,
+    },
+}
+
 /// Notices that the layout of the window changed while the word was typed.
 fn note_layout(s: &mut State, hkl: isize) {
     let Some(start) = s.buffer.start_hkl() else { return };
@@ -411,7 +425,12 @@ fn track_key(s: &mut State, vk: VIRTUAL_KEY, kb: &KBDLLHOOKSTRUCT) -> bool {
     let scancode = kb.scanCode as u16;
     let key = KeyStroke { scancode, shift, caps };
     let engine = engine::current();
-    let auto = s.config.common.mode == Mode::AutoLiterary && engine.literary_ready();
+    let mode = s.config.common.mode;
+    let auto = match mode {
+        Mode::AutoLiterary => engine.literary_ready(),
+        Mode::AutoProgramming => engine.programming_ready(),
+        Mode::Manual => false,
+    };
 
     if vk == VK_RETURN {
         if auto {
@@ -434,6 +453,17 @@ fn track_key(s: &mut State, vk: VIRTUAL_KEY, kb: &KBDLLHOOKSTRUCT) -> bool {
     match engine.table.class(&key) {
         KeyClass::None => {
             s.buffer.clear();
+            false
+        }
+        // in a program the identifiers have digits and `_`, and a token may start with `#` or `&`
+        KeyClass::Separator
+            if mode == Mode::AutoProgramming
+                && (is_digit_key(&key)
+                    || is_underscore_key(&key)
+                    || (s.buffer.is_empty() && engine.programming.as_ref().is_some_and(|p| p.is_sigil_key(&key)))) =>
+        {
+            note_layout(s, hkl);
+            s.buffer.push_in(key, hkl);
             false
         }
         KeyClass::Separator if !is_digit_key(&key) => on_trigger(s, &engine, Some(key), vk, hkl, hwnd.0 as isize),
@@ -465,31 +495,51 @@ fn on_trigger(s: &mut State, engine: &Engine, key: Option<KeyStroke>, vk: VIRTUA
         end_word(s, key);
         return false;
     };
-    let previous = s
-        .prev
-        .as_ref()
-        .filter(|p| p.hwnd == hwnd && p.at.elapsed() < PREVIOUS_WORD_TTL)
-        .and_then(|p| engine.table.layout_index(&p.layout_id));
-
     let started = Instant::now();
-    let verdict = engine.literary.decide(&engine.table, &Context { keys: s.buffer.keys(), current, previous });
-    let elapsed = started.elapsed();
-    let replace = match verdict {
-        Verdict::Keep(reason) => {
-            tracing::debug!("auto: keep ({reason:?}) in {elapsed:?}");
-            if matches!(reason, KeepReason::Dictionary | KeepReason::Exception) {
-                s.prev = Some(Prev { layout_id: current_id, at: Instant::now(), hwnd });
+    let decision = if s.config.common.mode == Mode::AutoProgramming {
+        let Some(detector) = engine.programming.as_ref() else {
+            end_word(s, key);
+            return false;
+        };
+        match detector.decide(&engine.table, &Context { keys: s.buffer.keys(), current, previous: None }) {
+            programming::Verdict::Keep(reason) => Decision::Keep(format!("{reason:?}")),
+            programming::Verdict::Replace(r) => {
+                Decision::Replace { text: r.text, layout: r.layout, info: format!("{:?}, hybrid {}", r.kind, r.hybrid) }
             }
+        }
+    } else {
+        let previous = s
+            .prev
+            .as_ref()
+            .filter(|p| p.hwnd == hwnd && p.at.elapsed() < PREVIOUS_WORD_TTL)
+            .and_then(|p| engine.table.layout_index(&p.layout_id));
+        match engine.literary.decide(&engine.table, &Context { keys: s.buffer.keys(), current, previous }) {
+            literary::Verdict::Keep(reason) => {
+                if matches!(reason, literary::KeepReason::Dictionary | literary::KeepReason::Exception) {
+                    s.prev = Some(Prev { layout_id: current_id.clone(), at: Instant::now(), hwnd });
+                }
+                Decision::Keep(format!("{reason:?}"))
+            }
+            literary::Verdict::Replace(r) => {
+                Decision::Replace { text: r.text, layout: Some(r.layout), info: format!("margin {}, dictionary {}", r.margin, r.dictionary) }
+            }
+        }
+    };
+    let elapsed = started.elapsed();
+    let (text, layout, info) = match decision {
+        Decision::Keep(reason) => {
+            tracing::debug!("auto: keep ({reason}) in {elapsed:?}");
             end_word(s, key);
             return false;
         }
-        Verdict::Replace(replace) => replace,
+        Decision::Replace { text, layout, info } => (text, layout, info),
     };
 
-    // the key that ended the word is typed again after the word, as it looks in the new layout
-    let target = engine.layouts[replace.layout].clone();
+    // the key that ended the word is typed again after the word, as it looks in the layout of the word
+    let shown_layout = layout.unwrap_or(current);
+    let target = engine.layouts[shown_layout].clone();
     let separator = match key {
-        Some(k) => match engine.table.render(&k, replace.layout) {
+        Some(k) => match engine.table.render(&k, shown_layout) {
             Some(c) => c.to_string(),
             None => {
                 end_word(s, key);
@@ -504,25 +554,24 @@ fn on_trigger(s: &mut State, engine: &Engine, key: Option<KeyStroke>, vk: VIRTUA
         return false;
     };
     tracing::debug!(
-        "auto: replace {} chars, layout {} -> {}, margin {}, dictionary {}, decided in {elapsed:?}",
+        "auto: replace {} chars, layout {} -> {} ({}), {info}, decided in {elapsed:?}",
         s.buffer.shown_len(),
         current_id,
         target.id,
-        replace.margin,
-        replace.dictionary
+        if layout.is_some() { "switched" } else { "kept" }
     );
     let plan = auto::Plan {
         hwnd,
         backspaces: s.buffer.shown_len(),
-        text: format!("{}{separator}", replace.text),
+        text: format!("{text}{separator}"),
         enter: key.is_none(),
-        target_hkl: target.hkl,
+        target_hkl: layout.map(|_| target.hkl),
         key_delay_ms: s.config.troubleshooting.key_delay_ms,
         sound: s.config.sounds.enabled.then(|| s.config.sounds.on_convert.clone()),
     };
     // from now on the buffer is the replaced word; the hotkey continues the cycle from this layout
     match key {
-        Some(k) => s.buffer.after_auto_replacement(replace.text.chars().count(), vec![k], seq, pos),
+        Some(k) => s.buffer.after_auto_replacement(text.chars().count(), vec![k], seq, pos),
         None => s.buffer.clear(),
     }
     s.buffer.set_start_hkl(target.hkl);

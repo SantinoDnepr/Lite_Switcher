@@ -2,6 +2,33 @@
 
 Versions and changes, newest first. Every change to the project is recorded here.
 
+## 0.7.0 - 2026-10-26
+
+Stage 4 of the automatic switching: the programming mode (`Auto programming`, language 1C).
+
+### Added
+- The programming detector (`lite-switcher-lang`): dictionary only, case-insensitive. A token is
+  looked up as a whole and as a split (a part in one layout, a part in another) in every layout the
+  pack needs; a sigil (`#`, `&`) followed by a known word is accepted; a word of up to three
+  letters has to be a keyword of the language; only trailing punctuation keys are tried as
+  punctuation; hybrids like `ЕстьNull` keep their layout.
+- `ProgrammingLanguagesc`: pack with 7,756 words built from a seed list (keywords, directives,
+  preprocessor) and from a public slice of real code (a token counts only if it is used in at least
+  3 independent project groups and occurs at least 20 times).
+- `dictgen programming`, `dictgen eval-programming` (seed check, replay of real code, ordinary words
+  with `--prose`), `dictgen list`.
+- The daemon replaces a token in the programming mode like in the literary one (same input gate,
+  trigger handling and cycle continuation); `target_hkl` of the plan lets the layout be chosen by
+  the pack.
+- `tools/e2e/auto-programming.ps1`: live scenarios (run only when nobody works at the PC).
+- `.gitignore`: `ProgrammingLanguages/*/local/` (the local lexicon, never committed).
+
+### Measured
+- Seed: 1464 of 1464 decisions correct (244 forms, 3 case variants, 2 layouts).
+- Replay of 1,000,000 tokens of real code: text changed 1 (0.0001%, `правыйшифт` -> `правыйiban`),
+  threshold 0.01%; about 27 microseconds per decision.
+- 60,000 frequent ordinary words (ru, en) typed correctly: 0 changed.
+
 ## 0.6.0 - 2026-10-26
 
 Stage 3 of the automatic switching: the literary mode (`Auto literary`) works.

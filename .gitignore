@@ -3,3 +3,8 @@
 /prompts
 .mcp.json
 .MCP
+ProgrammingLanguages/*/local/
+
+# the 1C dictionary is built from private code: never committed (only the seed is)
+ProgrammingLanguages/1c/*
+!ProgrammingLanguages/1c/seed.txt

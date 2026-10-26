@@ -7,7 +7,10 @@
 //! ```
 
 mod eval;
+mod eval_programming;
+mod list;
 mod literary;
+mod programming;
 
 use std::collections::HashMap;
 use std::process::ExitCode;
@@ -65,6 +68,12 @@ usage:
                    --license <license> --sources <sources> [--alphabet <letters>] [--match <prefix>]
                    [--min-count N] [--max-words N] [--min-len N] [--switch-margin N] [--dict-margin N] [--max-cost N]
                    [--forbidden <bigrams,...>] [--unique <letters>] [--exceptions <file>] [--fold-yo]
+  dictgen programming --code <id> --name <name> --seed <seed.txt> --out <folder> --license <license>
+                      --sources <sources> [--bsl <folder with .bsl>] [--min-groups N] [--min-count N]
+                      [--project-depth N] [--cluster-overlap F] [--latin-segments <list>]
+  dictgen eval-programming --packs <ProgrammingLanguages folder> [--code <id>] [--seed <seed.txt>]
+                           [--bsl <folder with .bsl>] [--sample N] [--prose <code=word-count list,...>] [--check]
+  dictgen list --pack <pack folder> [--limit N] [--prefix <text>] [--flags keyword,directive,...]
   dictgen eval --packs <LiteraryLanguages folder> --freq <code=file,code=file,...>
                [--sample N] [--head-rank N] [--switch-margin N] [--dict-margin N] [--max-cost N] [--check]";
 
@@ -75,6 +84,9 @@ fn run() -> Result<(), String> {
     match command.as_str() {
         "literary" => literary::run(&args),
         "eval" => eval::run(&args),
+        "programming" => programming::run(&args),
+        "list" => list::run(&args),
+        "eval-programming" => eval_programming::run(&args),
         other => Err(format!("unknown command '{other}'\n{USAGE}")),
     }
 }

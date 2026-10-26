@@ -10,6 +10,7 @@ use std::thread;
 use lite_switcher_core::config::Config;
 use lite_switcher_core::layout::{self, key_to_char, Layout};
 use lite_switcher_lang::literary::LiteraryDetector;
+use lite_switcher_lang::programming::ProgrammingDetector;
 use lite_switcher_lang::pack::{self, Loaded, PackStatus};
 use lite_switcher_lang::render::RenderTable;
 
@@ -24,6 +25,8 @@ pub struct Engine {
     /// What every key types in every layout, and the class of every key.
     pub table: RenderTable,
     pub literary: LiteraryDetector,
+    /// The detector of the selected programming language, if its pack is active.
+    pub programming: Option<ProgrammingDetector>,
 }
 
 impl Engine {
@@ -31,12 +34,17 @@ impl Engine {
     fn empty() -> Engine {
         let loaded = Loaded::default();
         let table = RenderTable::build(Vec::new(), |_, _, _| None);
-        Engine { literary: LiteraryDetector::new(&loaded, &[]), loaded, layouts: Vec::new(), table }
+        Engine { literary: LiteraryDetector::new(&loaded, &[]), programming: None, loaded, layouts: Vec::new(), table }
     }
 
     /// Can the automatic literary mode decide anything?
     pub fn literary_ready(&self) -> bool {
         !self.layouts.is_empty() && (0..self.layouts.len()).any(|i| self.literary.serves(i))
+    }
+
+    /// Can the automatic programming mode decide anything?
+    pub fn programming_ready(&self) -> bool {
+        self.programming.as_ref().is_some_and(|p| (0..self.layouts.len()).any(|i| p.serves(i)))
     }
 }
 
@@ -80,7 +88,8 @@ fn build(config: &Config) -> Engine {
     let table = RenderTable::build(ids, |i, scancode, shift| key_to_char(layouts[i].hkl, scancode, shift, false));
     tracing::debug!("key table for {} layouts built in {:?}", layouts.len(), started.elapsed());
     let detector = LiteraryDetector::new(&loaded, table.layout_ids());
-    Engine { loaded, layouts, table, literary: detector }
+    let programming = loaded.programming.clone().map(|pack| ProgrammingDetector::new(pack, &table));
+    Engine { loaded, layouts, table, literary: detector, programming }
 }
 
 /// Finds the packs, decides which are active (config + installed layouts) and opens their data in

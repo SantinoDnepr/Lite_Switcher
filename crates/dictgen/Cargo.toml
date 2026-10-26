@@ -9,4 +9,5 @@ name = "dictgen"
 path = "src/main.rs"
 
 [dependencies]
+lite-switcher-core = { path = "../core" }
 lite-switcher-lang = { path = "../lang" }
