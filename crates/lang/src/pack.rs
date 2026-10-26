@@ -89,11 +89,16 @@ pub fn discover_in(literary_root: Option<&Path>, programming_root: Option<&Path>
     found
 }
 
-/// Does an installed layout belong to the language `prefix` (`ru` matches `ru-RU`)?
-fn layout_matches(layout: &Layout, prefix: &str) -> bool {
-    let id = layout.id.to_ascii_lowercase();
+/// Does the layout id belong to the language `prefix` (`ru-RU` matches `ru`)?
+pub fn id_matches(id: &str, prefix: &str) -> bool {
+    let id = id.to_ascii_lowercase();
     let prefix = prefix.to_ascii_lowercase();
     id == prefix || id.starts_with(&format!("{prefix}-"))
+}
+
+/// Does an installed layout belong to the language `prefix` (`ru` matches `ru-RU`)?
+fn layout_matches(layout: &Layout, prefix: &str) -> bool {
+    id_matches(&layout.id, prefix)
 }
 
 /// A pack together with the answer to "does it work now?".

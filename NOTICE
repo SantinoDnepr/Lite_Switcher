@@ -1,0 +1,12 @@
+Lite Switcher - third party data
+
+The language packs in LiteraryLanguages/ contain frequency data derived from:
+
+- FrequencyWords by Hermit Dave (https://github.com/hermitdave/FrequencyWords),
+  content licensed under CC BY-SA 4.0, built from OpenSubtitles (https://www.opensubtitles.org,
+  OPUS). Used for the English, Russian and Ukrainian packs (the 2018 lists).
+
+The derived files (words.fst, ngram3.bin) are provided under the same licence, see LICENSE-DATA.
+The program code is licensed separately (see the license field in Cargo.toml).
+
+The sources and licences of every data source are described in docs/data-sources.md.

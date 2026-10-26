@@ -1,0 +1,12 @@
+[package]
+name = "lite-switcher-dictgen"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "dictgen"
+path = "src/main.rs"
+
+[dependencies]
+lite-switcher-lang = { path = "../lang" }

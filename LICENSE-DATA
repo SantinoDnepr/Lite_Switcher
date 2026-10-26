@@ -1,0 +1,11 @@
+The data files of the language packs (LiteraryLanguages/*, ProgrammingLanguages/*: words.fst,
+ngram3.bin, exceptions.txt, pack.ini) are licensed under the Creative Commons
+Attribution-ShareAlike 4.0 International licence (CC BY-SA 4.0):
+
+    https://creativecommons.org/licenses/by-sa/4.0/legalcode
+
+You may copy and redistribute the data in any medium or format and adapt it for any purpose,
+including commercially, if you give appropriate credit (see NOTICE), indicate if changes were made
+and distribute your adaptations under the same licence.
+
+The program source code is not covered by this licence.

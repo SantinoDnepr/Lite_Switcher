@@ -61,6 +61,9 @@ pub struct LiteraryParams {
     pub dict_margin: u32,
     /// Treat `ё` as `е` in the dictionary.
     pub fold_yo: bool,
+    /// A winner whose average trigram cost (cost units per trigram) is higher does not look like a
+    /// word at all and is never used.
+    pub max_average_cost: u32,
 }
 
 impl Default for LiteraryParams {
@@ -73,6 +76,7 @@ impl Default for LiteraryParams {
             switch_margin: 10,
             dict_margin: 2,
             fold_yo: false,
+            max_average_cost: 48,
         }
     }
 }
@@ -213,6 +217,9 @@ impl Manifest {
         }
         if let Some(v) = get("literary", "fold_yo").and_then(parse_bool) {
             literary.fold_yo = v;
+        }
+        if let Some(v) = get("literary", "max_average_cost").and_then(|v| v.parse().ok()) {
+            literary.max_average_cost = v;
         }
 
         let mut programming = ProgrammingParams::default();

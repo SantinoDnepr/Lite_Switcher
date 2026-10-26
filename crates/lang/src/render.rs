@@ -110,10 +110,10 @@ impl KeyRenderer for RenderTable {
     }
 }
 
-/// A small keyboard for the tests of this and the other modules: layouts `en`, `ru`, `uk` with the
-/// letter keys of the QWERTY rows plus the punctuation keys that are letters in Russian/Ukrainian.
-#[cfg(test)]
-pub(crate) mod fake {
+/// Static layouts `en`, `ru`, `uk` (the standard US, Russian and Ukrainian layouts): the letter keys
+/// of the QWERTY rows, the digits and the punctuation keys. Used by the tests and by `dictgen eval`,
+/// so that they do not depend on the layouts installed in Windows.
+pub mod presets {
     use super::*;
 
     // physical keys by their US keycap; scancodes follow the real keyboard
@@ -150,24 +150,28 @@ pub(crate) mod fake {
         })
     }
 
-    /// The keys that type `text` in the layout `layout` (letters and the punctuation of the rows).
-    pub fn keys_for(text: &str, layout: &str) -> Vec<KeyStroke> {
+    /// The keys that type `text` in the layout `layout` (letters and the punctuation of the rows);
+    /// `None` if some character cannot be typed there.
+    pub fn try_keys_for(text: &str, layout: &str) -> Option<Vec<KeyStroke>> {
         text.chars()
             .map(|c| {
-                for shift in [false, true] {
-                    if let Some(pos) = row(layout, shift).chars().position(|x| x == c) {
-                        return KeyStroke { scancode: SCAN[pos], shift, caps: false };
-                    }
-                }
-                panic!("{c:?} cannot be typed in {layout}");
+                [false, true].into_iter().find_map(|shift| {
+                    let pos = row(layout, shift).chars().position(|x| x == c)?;
+                    Some(KeyStroke { scancode: SCAN[pos], shift, caps: false })
+                })
             })
             .collect()
+    }
+
+    /// Like `try_keys_for`; panics if a character cannot be typed (for the tests).
+    pub fn keys_for(text: &str, layout: &str) -> Vec<KeyStroke> {
+        try_keys_for(text, layout).unwrap_or_else(|| panic!("{text:?} cannot be typed in {layout}"))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::fake::{keys_for, table};
+    use super::presets::{keys_for, table};
     use super::*;
 
     #[test]
