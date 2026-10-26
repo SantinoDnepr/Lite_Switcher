@@ -83,7 +83,7 @@ fn main() {
             return;
         }
     };
-    let tray = match tray::Tray::new(config.common.autoswitch, &Translator::new(&config.common.language)) {
+    let tray = match tray::Tray::new(config.common.mode, &Translator::new(&config.common.language)) {
         Ok(t) => Some(t),
         Err(e) => {
             tracing::warn!("tray icon: {e}");
@@ -104,7 +104,7 @@ fn main() {
                 if let Some(action) = hook::Action::from_wparam(msg.wParam.0) {
                     if hook::handle_action(action) {
                         if let Some(t) = &tray {
-                            t.refresh(hook::autoswitch_enabled());
+                            t.refresh(hook::current_mode());
                         }
                     }
                 }
@@ -118,7 +118,7 @@ fn main() {
                             sync_autostart(&cfg);
                             if let Some(t) = &tray {
                                 t.set_visible(cfg.common.show_tray_icon);
-                                t.refresh(cfg.common.autoswitch);
+                                t.refresh(cfg.common.mode);
                                 t.apply_language(&Translator::new(&cfg.common.language));
                             }
                             hook::set_config(cfg);

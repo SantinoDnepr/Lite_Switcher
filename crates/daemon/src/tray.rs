@@ -3,9 +3,10 @@
 use std::path::PathBuf;
 use std::process::Command;
 
-use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
+use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuId, MenuItem, PredefinedMenuItem, Submenu};
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
 
+use lite_switcher_core::config::Mode;
 use lite_switcher_core::i18n::Translator;
 
 use crate::hook::{post_action, post_quit, Action};
@@ -37,20 +38,39 @@ fn settings_exe() -> Option<PathBuf> {
     Some(exe.with_file_name("lite-switcher-settings.exe"))
 }
 
+/// The modes in the order of the "Mode" submenu.
+const MENU_MODES: [Mode; 3] = [Mode::AutoLiterary, Mode::AutoProgramming, Mode::Manual];
+
+fn mode_text_key(mode: Mode) -> &'static str {
+    match mode {
+        Mode::AutoLiterary => "tray.mode_auto_literary",
+        Mode::AutoProgramming => "tray.mode_auto_programming",
+        Mode::Manual => "tray.mode_manual",
+    }
+}
+
 pub struct Tray {
     icon: TrayIcon,
-    autoswitch: CheckMenuItem,
+    mode_menu: Submenu,
+    /// Check items of the submenu, in the order of `MENU_MODES`.
+    mode_items: Vec<CheckMenuItem>,
     settings: MenuItem,
     exit: MenuItem,
 }
 
 impl Tray {
-    pub fn new(autoswitch_on: bool, tr: &Translator) -> Result<Tray, Box<dyn std::error::Error>> {
-        let autoswitch = CheckMenuItem::new(tr.t("tray.auto_switching"), true, autoswitch_on, None);
+    pub fn new(mode: Mode, tr: &Translator) -> Result<Tray, Box<dyn std::error::Error>> {
+        // The Windows menu has no radio items: the check marks are kept exclusive by `refresh`.
+        let mode_menu = Submenu::new(tr.t("tray.mode"), true);
+        let mode_items: Vec<CheckMenuItem> =
+            MENU_MODES.iter().map(|m| CheckMenuItem::new(tr.t(mode_text_key(*m)), true, *m == mode, None)).collect();
+        for item in &mode_items {
+            mode_menu.append(item)?;
+        }
         let settings = MenuItem::new(tr.t("tray.settings"), true, None);
         let exit = MenuItem::new(tr.t("tray.exit"), true, None);
         let menu = Menu::new();
-        menu.append_items(&[&autoswitch, &settings, &PredefinedMenuItem::separator(), &exit])?;
+        menu.append_items(&[&mode_menu, &settings, &PredefinedMenuItem::separator(), &exit])?;
 
         let icon = TrayIconBuilder::new()
             .with_menu(Box::new(menu))
@@ -59,11 +79,12 @@ impl Tray {
             .build()?;
 
         // The handler must be Send + Sync, so it only touches ids and posts messages to the main thread.
-        let (autoswitch_id, settings_id, exit_id) =
-            (autoswitch.id().clone(), settings.id().clone(), exit.id().clone());
+        let mode_ids: Vec<(MenuId, Mode)> =
+            mode_items.iter().zip(MENU_MODES).map(|(item, m)| (item.id().clone(), m)).collect();
+        let (settings_id, exit_id) = (settings.id().clone(), exit.id().clone());
         MenuEvent::set_event_handler(Some(move |event: MenuEvent| {
-            if event.id == autoswitch_id {
-                post_action(Action::ToggleAutoswitch);
+            if let Some((_, mode)) = mode_ids.iter().find(|(id, _)| *id == event.id) {
+                post_action(Action::set_mode(*mode));
             } else if event.id == settings_id {
                 if let Some(path) = settings_exe() {
                     if let Err(e) = Command::new(&path).spawn() {
@@ -74,7 +95,7 @@ impl Tray {
                 post_quit();
             }
         }));
-        Ok(Tray { icon, autoswitch, settings, exit })
+        Ok(Tray { icon, mode_menu, mode_items, settings, exit })
     }
 
     pub fn set_visible(&self, visible: bool) {
@@ -83,14 +104,19 @@ impl Tray {
 
     /// Shows the texts of the menu and the tooltip in the given language.
     pub fn apply_language(&self, tr: &Translator) {
-        self.autoswitch.set_text(tr.t("tray.auto_switching"));
+        self.mode_menu.set_text(tr.t("tray.mode"));
+        for (item, mode) in self.mode_items.iter().zip(MENU_MODES) {
+            item.set_text(tr.t(mode_text_key(mode)));
+        }
         self.settings.set_text(tr.t("tray.settings"));
         self.exit.set_text(tr.t("tray.exit"));
         let _ = self.icon.set_tooltip(Some(tr.t("tray.tooltip")));
     }
 
-    /// Syncs the check mark of the menu item with the autoswitch setting.
-    pub fn refresh(&self, autoswitch_on: bool) {
-        self.autoswitch.set_checked(autoswitch_on);
+    /// Puts the check mark on the item of the current mode (and only on it).
+    pub fn refresh(&self, mode: Mode) {
+        for (item, m) in self.mode_items.iter().zip(MENU_MODES) {
+            item.set_checked(m == mode);
+        }
     }
 }

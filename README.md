@@ -14,10 +14,15 @@ variant of the same keys, and so on, back to the original. The layouts are taken
 | `Pause` (`Break`) | convert the last typed word to the next layout; press again to continue the cycle |
 | `Shift+Pause` | convert the selected text to the next layout (the result stays selected) |
 | `Alt+Pause` | invert the case of the selected text |
-| *(not assigned)* | turn the automatic switching on / off |
+| *(not assigned)* | switch between `manual` and the last automatic mode |
 
-The tray menu has the "Auto-switching" check box (automatic switching - not implemented yet) and
-the items "Settings..." and "Exit".
+The tray menu has the "Mode" submenu (Auto literary / Auto programming / Manual; the automatic modes
+are being built, until their language packs exist they work as manual) and the items "Settings..."
+and "Exit". The mode is stored in `[common] mode`.
+
+In Troubleshooting there are seven check boxes "Do not switch the keyboard layout if any keys have
+been pressed" (Backspace, arrows, Delete, Change layout): the automatic switching skips a word if a
+checked key was pressed while it was typed. The hotkeys are never blocked by them.
 
 ## Languages
 

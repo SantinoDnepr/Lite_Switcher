@@ -18,7 +18,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WM_MBUTTONDOWN, WM_QUIT, WM_RBUTTONDOWN, WM_SYSKEYDOWN, WM_SYSKEYUP,
 };
 
-use lite_switcher_core::config::{Config, Hotkeys};
+use lite_switcher_core::config::{Config, Hotkeys, Mode};
 use lite_switcher_core::hotkey::Hotkey;
 use lite_switcher_core::layout::{self, key_to_char, Layout};
 use lite_switcher_core::word::{KeyStroke, WordBuffer};
@@ -37,14 +37,36 @@ pub enum Action {
     ConvertWord,
     ConvertSelection,
     InvertCase,
+    /// Hotkey: switches between `manual` and the last automatic mode.
     ToggleAutoswitch,
+    /// Tray menu: select a mode.
+    SetManual,
+    SetAutoLiterary,
+    SetAutoProgramming,
 }
 
 impl Action {
     pub fn from_wparam(value: usize) -> Option<Action> {
-        [Action::ConvertWord, Action::ConvertSelection, Action::InvertCase, Action::ToggleAutoswitch]
-            .into_iter()
-            .find(|a| *a as usize == value)
+        [
+            Action::ConvertWord,
+            Action::ConvertSelection,
+            Action::InvertCase,
+            Action::ToggleAutoswitch,
+            Action::SetManual,
+            Action::SetAutoLiterary,
+            Action::SetAutoProgramming,
+        ]
+        .into_iter()
+        .find(|a| *a as usize == value)
+    }
+
+    /// The action of the tray menu item that selects the mode.
+    pub fn set_mode(mode: Mode) -> Action {
+        match mode {
+            Mode::Manual => Action::SetManual,
+            Mode::AutoLiterary => Action::SetAutoLiterary,
+            Mode::AutoProgramming => Action::SetAutoProgramming,
+        }
     }
 
     fn hotkey(self, hotkeys: &Hotkeys) -> Option<Hotkey> {
@@ -53,6 +75,7 @@ impl Action {
             Action::ConvertSelection => hotkeys.convert_selection,
             Action::InvertCase => hotkeys.invert_case,
             Action::ToggleAutoswitch => hotkeys.toggle_autoswitch,
+            Action::SetManual | Action::SetAutoLiterary | Action::SetAutoProgramming => None,
         }
     }
 }
@@ -72,6 +95,8 @@ struct State {
     ignored: bool,
     /// The key of a hotkey whose press was swallowed (its release and auto-repeat are swallowed too).
     swallowed_vk: Option<u32>,
+    /// The automatic mode that the toggle hotkey returns to.
+    last_auto: Mode,
 }
 
 thread_local! {
@@ -93,15 +118,20 @@ pub fn set_config(config: Config) {
         let mut slot = s.borrow_mut();
         match slot.as_mut() {
             Some(state) => {
-                if state.config.common.autoswitch != config.common.autoswitch {
-                    tracing::info!("autoswitch = {} (not implemented yet)", config.common.autoswitch);
+                if state.config.common.mode != config.common.mode {
+                    log_mode(config.common.mode);
+                }
+                if config.common.mode.is_auto() {
+                    state.last_auto = config.common.mode;
                 }
                 state.config = config;
                 state.layouts = layouts;
                 state.ignored_hwnd = 0;
             }
             None => {
+                log_mode(config.common.mode);
                 *slot = Some(State {
+                    last_auto: if config.common.mode.is_auto() { config.common.mode } else { Mode::AutoLiterary },
                     config,
                     layouts,
                     buffer: WordBuffer::default(),
@@ -115,9 +145,17 @@ pub fn set_config(config: Config) {
     });
 }
 
-/// Is the automatic switching turned on? (the switching itself is not implemented yet)
-pub fn autoswitch_enabled() -> bool {
-    with_state(|s| s.config.common.autoswitch).unwrap_or(false)
+fn log_mode(mode: Mode) {
+    if mode.is_auto() {
+        tracing::info!("mode = {} (the automatic switching is not implemented yet)", mode.as_str());
+    } else {
+        tracing::info!("mode = {}", mode.as_str());
+    }
+}
+
+/// The current switching mode.
+pub fn current_mode() -> Mode {
+    with_state(|s| s.config.common.mode).unwrap_or_default()
 }
 
 /// Posts an action to the main (hook) thread.
@@ -289,23 +327,40 @@ pub fn handle_action(action: Action) -> bool {
         Action::ConvertWord => convert_word(),
         Action::ConvertSelection => start_selection(Kind::ConvertLayout, action),
         Action::InvertCase => start_selection(Kind::InvertCase, action),
-        Action::ToggleAutoswitch => return toggle_autoswitch(),
+        Action::ToggleAutoswitch => return toggle_mode(),
+        Action::SetManual => return set_mode(Mode::Manual),
+        Action::SetAutoLiterary => return set_mode(Mode::AutoLiterary),
+        Action::SetAutoProgramming => return set_mode(Mode::AutoProgramming),
     }
     false
 }
 
-/// Flips the autoswitch flag and stores it in the config file.
-fn toggle_autoswitch() -> bool {
-    let Some((config, hotkey)) = with_state(|s| {
-        s.config.common.autoswitch = !s.config.common.autoswitch;
-        (s.config.clone(), s.config.hotkeys.toggle_autoswitch)
+/// The toggle hotkey: `manual` <-> the last automatic mode.
+fn toggle_mode() -> bool {
+    let Some((target, hotkey)) = with_state(|s| {
+        let target = if s.config.common.mode.is_auto() { Mode::Manual } else { s.last_auto };
+        (target, s.config.hotkeys.toggle_autoswitch)
     }) else {
         return false;
     };
-    tracing::info!("autoswitch = {} (not implemented yet)", config.common.autoswitch);
     if let Some(hotkey) = hotkey {
         inject::release_hotkey_modifiers(&hotkey);
     }
+    set_mode(target)
+}
+
+/// Selects the mode and stores it in the config file (the settings follow the file).
+fn set_mode(mode: Mode) -> bool {
+    let Some(config) = with_state(|s| {
+        s.config.common.mode = mode;
+        if mode.is_auto() {
+            s.last_auto = mode;
+        }
+        s.config.clone()
+    }) else {
+        return false;
+    };
+    log_mode(mode);
     if let Err(e) = config.save() {
         tracing::warn!("cannot save the config: {e}");
     }

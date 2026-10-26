@@ -2,6 +2,30 @@
 
 Versions and changes, newest first. Every change to the project is recorded here.
 
+## 0.4.0 - 2026-10-26
+
+Stage 1 of the automatic switching (`docs/auto-switching-spec.md`): modes and the Troubleshooting key
+flags. The automatic modes themselves are not built yet (they work as manual).
+
+### Added
+- `[common] mode = manual | auto_literary | auto_programming` (default `manual`). The old
+  `autoswitch` flag is read once when `mode` is absent (`true` -> `auto_literary`) and is not written
+  any more.
+- Tray menu: the "Auto-switching" check box is replaced by the "Mode" submenu with the items
+  "Auto literary", "Auto programming" and "Manual" (the check mark follows the current mode).
+- Settings, Common / General: the "Mode" drop-down list instead of the check box.
+- Settings, Troubleshooting: the group "Do not switch the keyboard layout if any keys have been
+  pressed" with seven check boxes (Backspace, Left/Right/Up/Down arrow, Delete, Change layout) and the
+  matching `no_switch_if_*` keys in `[troubleshooting]` (all checked by default). The values are
+  stored; they take effect when the automatic switching is built.
+- Config sections `[literary_language] enabled` (`auto` or pack codes) and
+  `[programming_language] selected` (one pack code) for the next stage.
+
+### Changed
+- The toggle hotkey (`toggle_autoswitch`) now switches between `manual` and the last automatic mode.
+- The old texts `tray.auto_switching`, `common.auto_switching`, `common.auto_switching_hint` are removed
+  from the language files; the new ones are used.
+
 ## 0.3.4 - 2026-10-26
 
 ### Changed

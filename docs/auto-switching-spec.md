@@ -196,7 +196,7 @@ no_switch_if_change_layout = true
 | `troubleshooting.no_switch_change_layout` | Change layout | Смена раскладки | Зміна розкладки |
 | `troubleshooting.no_switch_hint` | Applies to the automatic switching only; the hotkeys always work. | Относится только к автоматическому переключению; хоткеи работают всегда. | Стосується лише автоматичного перемикання; гарячі клавіші працюють завжди. |
 
-Эти ключи **уже добавлены** в `Language\English.ini`, `Russian.ini`, `Ukrainian.ini` (раздел перед реализацией; в коде пока не используются). Старые ключи `tray.auto_switching`, `common.auto_switching`, `common.auto_switching_hint` удаляются на этапе 1 вместе с флажком (тест полноты проверяет все три файла). Надписи пунктов написаны с заглавной буквы, как «Auto-switching» в ручной правке заказчика.
+Эти ключи **добавлены** в `Language\English.ini`, `Russian.ini`, `Ukrainian.ini`. Ключи этапа 1 (`tray.mode*`, `common.mode*`, `troubleshooting.no_switch_*`) уже используются программой, старые ключи `tray.auto_switching`, `common.auto_switching`, `common.auto_switching_hint` удалены (тест полноты проверяет все три файла). Остальные ключи подключаются на этапе 2. Надписи пунктов написаны с заглавной буквы, как «Auto-switching» в ручной правке заказчика.
 
 ### 4.10 Инструмент `dictgen`
 

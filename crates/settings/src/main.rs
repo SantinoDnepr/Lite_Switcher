@@ -9,7 +9,7 @@ use windows::Win32::Foundation::{GetLastError, ERROR_ALREADY_EXISTS};
 use windows::Win32::System::Threading::CreateMutexW;
 use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_CONTROL, VK_LWIN, VK_MENU, VK_RWIN, VK_SHIFT};
 
-use lite_switcher_core::config::{Config, Hotkeys};
+use lite_switcher_core::config::{Config, Hotkeys, Mode};
 use lite_switcher_core::hotkey::{vk_name, Hotkey};
 use lite_switcher_core::i18n::{self, Language, Translator};
 use lite_switcher_core::{autostart, layout};
@@ -20,6 +20,17 @@ enum Tab {
     Hotkeys,
     Troubleshooting,
     Sounds,
+}
+
+/// The modes in the order of the drop-down list.
+const MODES: [Mode; 3] = [Mode::AutoLiterary, Mode::AutoProgramming, Mode::Manual];
+
+fn mode_text_key(mode: Mode) -> &'static str {
+    match mode {
+        Mode::AutoLiterary => "tray.mode_auto_literary",
+        Mode::AutoProgramming => "tray.mode_auto_programming",
+        Mode::Manual => "tray.mode_manual",
+    }
 }
 
 /// The hotkeys that can be edited.
@@ -307,8 +318,20 @@ impl App {
         }
         ui.separator();
         ui.heading(tr.t("common.general_heading"));
-        ui.checkbox(&mut self.cfg.common.autoswitch, tr.t("common.auto_switching"));
-        ui.label(tr.t("common.auto_switching_hint"));
+        ui.horizontal(|ui| {
+            ui.label(tr.t("common.mode"));
+            egui::ComboBox::from_id_salt("mode")
+                .selected_text(tr.t(mode_text_key(self.cfg.common.mode)))
+                .show_ui(ui, |ui| {
+                    for mode in MODES {
+                        ui.selectable_value(&mut self.cfg.common.mode, mode, tr.t(mode_text_key(mode)));
+                    }
+                });
+        });
+        if self.cfg.common.mode.is_auto() {
+            // no language packs exist yet: an automatic mode works as manual
+            ui.weak(tr.t("common.mode_hint_no_packs"));
+        }
         ui.checkbox(&mut self.cfg.common.autostart, tr.t("common.autostart"));
         ui.checkbox(&mut self.cfg.common.show_tray_icon, tr.t("common.show_tray_icon"));
         ui.checkbox(&mut self.cfg.common.keep_trailing_space, tr.t("common.keep_trailing_space"));
@@ -385,6 +408,20 @@ impl App {
         });
         ui.label(tr.t("troubleshooting.ignored_apps"));
         ui.add(egui::TextEdit::multiline(&mut self.ignored_text).desired_rows(4).desired_width(f32::INFINITY));
+        ui.separator();
+        ui.group(|ui| {
+            ui.strong(tr.t("troubleshooting.no_switch_heading"));
+            let ns = &mut t.no_switch;
+            ui.checkbox(&mut ns.backspace, tr.t("troubleshooting.no_switch_backspace"));
+            ui.checkbox(&mut ns.left, tr.t("troubleshooting.no_switch_left"));
+            ui.checkbox(&mut ns.right, tr.t("troubleshooting.no_switch_right"));
+            ui.checkbox(&mut ns.up, tr.t("troubleshooting.no_switch_up"));
+            ui.checkbox(&mut ns.down, tr.t("troubleshooting.no_switch_down"));
+            ui.checkbox(&mut ns.delete, tr.t("troubleshooting.no_switch_delete"));
+            ui.checkbox(&mut ns.change_layout, tr.t("troubleshooting.no_switch_change_layout"));
+            ui.weak(tr.t("troubleshooting.no_switch_hint"));
+        });
+        ui.separator();
         ui.horizontal(|ui| {
             if ui.button(tr.t("buttons.open_config_folder")).clicked() {
                 let _ = Command::new("explorer").arg(Config::dir()).spawn();
