@@ -2,6 +2,30 @@
 
 Versions and changes, newest first. Every change to the project is recorded here.
 
+## 0.3.4 - 2026-10-26
+
+### Changed
+- `docs/auto-switching-architecture.md` (version 2) and `docs/auto-switching-spec.md` (version 1.1)
+  reworked after `prompts/prompt004.md`: one programming language selected with a radio button;
+  auto-replacement also on Enter and unambiguous punctuation (the trigger key is swallowed and
+  typed again after the replacement); the convert hotkey continues the cycle after an automatic
+  replacement; a group of seven "Do not switch the keyboard layout if any keys have been pressed"
+  check boxes in Troubleshooting (Backspace, arrows, Delete, Change layout); decisions on the
+  corpora, committing frequency slices and the default mode.
+- Estimates replaced by measurements: size and speed of the dictionaries, key rendering and the
+  hybrid segmentation, statistics of the 1C corpus per project (23 folders = 12-16 independent
+  groups), coverage of the hybrid-word rule (about 60 %), and a prototype of the literary cascade
+  on word-frequency lists (accuracy targets in the specification are based on it).
+- Added a readiness check (architecture, section 12) with the list of changes of existing code and
+  the readiness of every stage.
+
+### Added
+- `docs/data-sources.md`: sources of data for the language packs, verified licences (what is used,
+  what is excluded and why), attribution template.
+- Translations of the new texts (Mode menu, language tabs, programming language radio list,
+  Troubleshooting group) in `Language\English.ini`, `Russian.ini`, `Ukrainian.ini`. They are not used
+  by the program yet (planned for stage 1); no program code changed.
+
 ## 0.3.3 - 2026-10-25
 
 ### Added
