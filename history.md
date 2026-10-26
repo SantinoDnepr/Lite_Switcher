@@ -2,6 +2,39 @@
 
 Versions and changes, newest first. Every change to the project is recorded here.
 
+## 0.6.0 - 2026-10-26
+
+Stage 3 of the automatic switching: the literary mode (`Auto literary`) works.
+
+### Added
+- Automatic replacement of a word typed in the wrong layout. The word is checked when it is ended
+  with a space, Enter or a punctuation key that is never a letter in the installed layouts; the
+  decision takes a few microseconds. The ending key is swallowed and typed again after the
+  replacement (a punctuation key as the character of the new layout, Enter as Enter). The convert
+  hotkey continues the cycle from the new layout.
+- Input gate: the keys that the user types while a word is being replaced are held back and replayed
+  afterwards (at most 200 ms).
+- The literary detector (`lite-switcher-lang`): rules (letters on punctuation keys, forbidden
+  bigrams, abbreviations in capitals, exceptions), a dictionary word beats a word that only looks like
+  one, letter trigram costs with margins, punctuation around the word is tried both as letters and as
+  punctuation, the language of the previous word breaks ru/uk ties, a word that looks the same in the
+  other layout is left alone.
+- The Troubleshooting flags take effect: Backspace, arrows, Delete and a layout change while a word is
+  typed make it "unclean" and it is skipped (the hotkeys are never blocked).
+- `dictgen` tool: `dictgen literary` builds a pack from a word-count list, `dictgen eval` measures
+  false switches and restored words on frequent and rare words and checks the acceptance thresholds.
+- Packs `LiteraryLanguages\en`, `ru`, `uk` (46-48 thousand words each, 1.3 MB in total) built from
+  FrequencyWords 2018; `NOTICE`, `LICENSE-DATA`.
+- `tools\e2e\auto-literary.ps1`: a live check of the automatic mode in a text box (run it when
+  nobody works at the computer).
+
+### Changed
+- `WordBuffer` keeps the keys typed after the word (punctuation too), the layout at the start of the
+  word and the "unclean" bits; in an automatic mode the keys are classified by the key table
+  (letter, separator, ambiguous) instead of asking Windows for every key.
+- Delete no longer clears the typed word (it removes what is after the caret).
+- Measured accuracy replaces the prototype figures in the architecture and the specification.
+
 ## 0.5.0 - 2026-10-26
 
 Stage 2 of the automatic switching: the infrastructure of the language packs. There are no packs yet,

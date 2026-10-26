@@ -3,14 +3,15 @@
 use std::cell::RefCell;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::time::{Duration, Instant};
 
 use windows::Win32::Foundation::{HINSTANCE, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    GetKeyState, VIRTUAL_KEY, VK_BACK, VK_CAPITAL, VK_CONTROL, VK_ESCAPE, VK_LCONTROL, VK_LMENU,
-    VK_LSHIFT, VK_LWIN, VK_MENU, VK_NUMLOCK, VK_RCONTROL, VK_RETURN, VK_RMENU, VK_RSHIFT, VK_RWIN,
-    VK_SCROLL, VK_SHIFT, VK_SPACE, VK_TAB,
+    GetKeyState, VIRTUAL_KEY, VK_BACK, VK_CAPITAL, VK_CONTROL, VK_DELETE, VK_DOWN, VK_ESCAPE, VK_LCONTROL,
+    VK_LEFT, VK_LMENU, VK_LSHIFT, VK_LWIN, VK_MENU, VK_NUMLOCK, VK_RCONTROL, VK_RETURN, VK_RIGHT, VK_RMENU,
+    VK_RSHIFT, VK_RWIN, VK_SCROLL, VK_SHIFT, VK_SPACE, VK_TAB, VK_UP,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CallNextHookEx, PostThreadMessageW, SetWindowsHookExW, UnhookWindowsHookEx, HHOOK, KBDLLHOOKSTRUCT,
@@ -21,15 +22,31 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use lite_switcher_core::config::{Config, Hotkeys, Mode};
 use lite_switcher_core::hotkey::Hotkey;
 use lite_switcher_core::layout::{self, key_to_char, Layout};
-use lite_switcher_core::word::{KeyStroke, WordBuffer};
+use lite_switcher_core::word::{taint, KeyStroke, WordBuffer};
+use lite_switcher_lang::literary::{Context, KeepReason, Verdict};
+use lite_switcher_lang::render::{KeyClass, KeyRenderer};
 
+use crate::engine::{self, Engine};
 use crate::inject::{self, MARKER};
 use crate::selection::{self, Kind};
+use crate::auto;
 
 /// Posted to the main thread when a hotkey is pressed; `wParam` is the `Action`.
 pub const WM_ACTION: u32 = WM_APP + 1;
 /// Posted to the main thread when the language packs have been (re)loaded.
 pub const WM_PACKS_LOADED: u32 = WM_APP + 2;
+/// Posted to the main thread when a word has to be replaced automatically (see `auto`).
+pub const WM_AUTO_REPLACE: u32 = WM_APP + 3;
+
+/// How long the language of the previous word helps to decide between similar languages.
+const PREVIOUS_WORD_TTL: Duration = Duration::from_secs(30);
+
+/// The language (layout) of the previous word.
+struct Prev {
+    layout_id: String,
+    at: Instant,
+    hwnd: isize,
+}
 
 static MAIN_THREAD: AtomicU32 = AtomicU32::new(0);
 
@@ -99,6 +116,8 @@ struct State {
     swallowed_vk: Option<u32>,
     /// The automatic mode that the toggle hotkey returns to.
     last_auto: Mode,
+    /// The language of the previous word (for ru/uk ties).
+    prev: Option<Prev>,
 }
 
 thread_local! {
@@ -134,6 +153,7 @@ pub fn set_config(config: Config) {
                 log_mode(config.common.mode);
                 *slot = Some(State {
                     last_auto: if config.common.mode.is_auto() { config.common.mode } else { Mode::AutoLiterary },
+                    prev: None,
                     config,
                     layouts,
                     buffer: WordBuffer::default(),
@@ -148,8 +168,8 @@ pub fn set_config(config: Config) {
 }
 
 fn log_mode(mode: Mode) {
-    if mode.is_auto() {
-        tracing::info!("mode = {} (the automatic switching is not implemented yet)", mode.as_str());
+    if mode == Mode::AutoProgramming {
+        tracing::info!("mode = {} (not implemented yet: works as manual)", mode.as_str());
     } else {
         tracing::info!("mode = {}", mode.as_str());
     }
@@ -208,6 +228,10 @@ unsafe extern "system" fn keyboard_proc(code: i32, wparam: WPARAM, lparam: LPARA
     if code == 0 {
         let kb = &*(lparam.0 as *const KBDLLHOOKSTRUCT);
         if kb.dwExtraInfo != MARKER {
+            // a word is being replaced: the keys of the user wait until it is done
+            if auto::hold_if_replacing(kb, wparam.0 as u32) {
+                return LRESULT(1);
+            }
             let swallow = catch_unwind(AssertUnwindSafe(|| on_key(wparam.0 as u32, kb))).unwrap_or(false);
             if swallow {
                 return LRESULT(1);
@@ -278,8 +302,7 @@ fn on_key(msg: u32, kb: &KBDLLHOOKSTRUCT) -> bool {
         if !down || is_modifier(vk) || foreground_ignored(s) {
             return false;
         }
-        track_key(s, vk, kb);
-        false
+        track_key(s, vk, kb)
     })
     .unwrap_or(false)
 }
@@ -301,33 +324,212 @@ fn foreground_ignored(s: &mut State) -> bool {
     s.ignored
 }
 
-fn track_key(s: &mut State, vk: VIRTUAL_KEY, kb: &KBDLLHOOKSTRUCT) {
+/// Keeps the word as it is after the key that ended it.
+fn end_word(s: &mut State, key: Option<KeyStroke>) {
+    match key {
+        Some(k) => s.buffer.trailing_key(k, s.config.common.keep_trailing_space),
+        None => s.buffer.clear(),
+    }
+}
+
+/// The digit keys of the main row: part of a word ("abc123"), not its end.
+fn is_digit_key(key: &KeyStroke) -> bool {
+    !key.shift && (0x02..=0x0B).contains(&key.scancode)
+}
+
+/// Notices that the layout of the window changed while the word was typed.
+fn note_layout(s: &mut State, hkl: isize) {
+    let Some(start) = s.buffer.start_hkl() else { return };
+    if start == hkl || s.buffer.is_empty() {
+        return;
+    }
+    if s.config.troubleshooting.no_switch.change_layout {
+        s.buffer.taint(taint::CHANGE_LAYOUT);
+        s.buffer.set_start_hkl(hkl);
+    } else {
+        s.buffer.restart_in(hkl);
+    }
+}
+
+/// Tracks the typed word. Returns true if the key must be swallowed (it ended a word that is
+/// being replaced automatically).
+fn track_key(s: &mut State, vk: VIRTUAL_KEY, kb: &KBDLLHOOKSTRUCT) -> bool {
     let ctrl_alt_win = inject::is_down(VK_CONTROL)
         || inject::is_down(VK_MENU)
         || inject::is_down(VK_LWIN)
         || inject::is_down(VK_RWIN);
     if ctrl_alt_win {
         s.buffer.clear();
-        return;
+        return false;
     }
+    let ns = s.config.troubleshooting.no_switch;
     match vk {
-        VK_BACK => s.buffer.backspace(),
-        VK_SPACE => s.buffer.space(s.config.common.keep_trailing_space),
-        VK_RETURN | VK_TAB | VK_ESCAPE => s.buffer.clear(),
-        // numpad keys and extended keys (arrows, Home, End, Delete...) are not part of a word
-        _ if (0x60..=0x6F).contains(&vk.0) || kb.flags.0 & LLKHF_EXTENDED.0 != 0 => s.buffer.clear(),
-        _ => {
-            let hkl = inject::window_hkl(inject::foreground());
-            let shift = inject::is_down(VK_SHIFT);
-            let caps = unsafe { GetKeyState(VK_CAPITAL.0 as i32) } & 1 != 0;
-            let scancode = kb.scanCode as u16;
-            if key_to_char(hkl, scancode, shift, caps).is_some() {
-                s.buffer.push(KeyStroke { scancode, shift, caps });
-            } else {
-                s.buffer.clear();
+        VK_BACK => {
+            s.buffer.backspace();
+            if ns.backspace {
+                s.buffer.taint(taint::BACKSPACE);
             }
+            return false;
+        }
+        // the caret moves: the word is over, and the text typed after the move is only a fragment
+        VK_LEFT | VK_RIGHT | VK_UP | VK_DOWN => {
+            let (checked, bit) = match vk {
+                VK_LEFT => (ns.left, taint::LEFT),
+                VK_RIGHT => (ns.right, taint::RIGHT),
+                VK_UP => (ns.up, taint::UP),
+                _ => (ns.down, taint::DOWN),
+            };
+            s.buffer.clear();
+            if checked {
+                s.buffer.taint(bit);
+            }
+            return false;
+        }
+        // Delete removes what is after the caret: the typed word stays intact
+        VK_DELETE => {
+            if ns.delete {
+                s.buffer.taint(taint::DELETE);
+            }
+            return false;
+        }
+        VK_TAB | VK_ESCAPE => {
+            s.buffer.clear();
+            return false;
+        }
+        // numpad keys and the other extended keys (Home, End, Insert...) are not part of a word
+        _ if (0x60..=0x6F).contains(&vk.0) || kb.flags.0 & LLKHF_EXTENDED.0 != 0 => {
+            s.buffer.clear();
+            return false;
+        }
+        _ => {}
+    }
+
+    let hwnd = inject::foreground();
+    let hkl = inject::window_hkl(hwnd);
+    let shift = inject::is_down(VK_SHIFT);
+    let caps = unsafe { GetKeyState(VK_CAPITAL.0 as i32) } & 1 != 0;
+    let scancode = kb.scanCode as u16;
+    let key = KeyStroke { scancode, shift, caps };
+    let engine = engine::current();
+    let auto = s.config.common.mode == Mode::AutoLiterary && engine.literary_ready();
+
+    if vk == VK_RETURN {
+        if auto {
+            return on_trigger(s, &engine, None, vk, hkl, hwnd.0 as isize);
+        }
+        s.buffer.clear();
+        return false;
+    }
+    if !auto {
+        // manual mode: every printable key is part of the word, a space is kept after it
+        if vk == VK_SPACE {
+            s.buffer.space(s.config.common.keep_trailing_space);
+        } else if key_to_char(hkl, scancode, shift, caps).is_some() {
+            s.buffer.push_in(key, hkl);
+        } else {
+            s.buffer.clear();
+        }
+        return false;
+    }
+    match engine.table.class(&key) {
+        KeyClass::None => {
+            s.buffer.clear();
+            false
+        }
+        KeyClass::Separator if !is_digit_key(&key) => on_trigger(s, &engine, Some(key), vk, hkl, hwnd.0 as isize),
+        // letters, keys that are letters in some layouts, digits
+        _ => {
+            note_layout(s, hkl);
+            s.buffer.push_in(key, hkl);
+            false
         }
     }
+}
+
+/// The key `key` (`None` = Enter) ended the word: decide whether to replace it. Returns true if
+/// the key was swallowed because the word is being replaced.
+fn on_trigger(s: &mut State, engine: &Engine, key: Option<KeyStroke>, vk: VIRTUAL_KEY, hkl: isize, hwnd: isize) -> bool {
+    // nothing typed, or a second separator in a row: the word was already judged
+    if s.buffer.is_empty() || !s.buffer.trailing().is_empty() {
+        end_word(s, key);
+        return false;
+    }
+    note_layout(s, hkl);
+    if s.buffer.is_tainted() {
+        tracing::debug!("auto: skipped, an unwanted key was pressed (taint {:#b})", s.buffer.taint_bits());
+        end_word(s, key);
+        return false;
+    }
+    let current_id = layout::describe(hkl).id;
+    let Some(current) = engine.table.layout_index(&current_id) else {
+        end_word(s, key);
+        return false;
+    };
+    let previous = s
+        .prev
+        .as_ref()
+        .filter(|p| p.hwnd == hwnd && p.at.elapsed() < PREVIOUS_WORD_TTL)
+        .and_then(|p| engine.table.layout_index(&p.layout_id));
+
+    let started = Instant::now();
+    let verdict = engine.literary.decide(&engine.table, &Context { keys: s.buffer.keys(), current, previous });
+    let elapsed = started.elapsed();
+    let replace = match verdict {
+        Verdict::Keep(reason) => {
+            tracing::debug!("auto: keep ({reason:?}) in {elapsed:?}");
+            if matches!(reason, KeepReason::Dictionary | KeepReason::Exception) {
+                s.prev = Some(Prev { layout_id: current_id, at: Instant::now(), hwnd });
+            }
+            end_word(s, key);
+            return false;
+        }
+        Verdict::Replace(replace) => replace,
+    };
+
+    // the key that ended the word is typed again after the word, as it looks in the new layout
+    let target = engine.layouts[replace.layout].clone();
+    let separator = match key {
+        Some(k) => match engine.table.render(&k, replace.layout) {
+            Some(c) => c.to_string(),
+            None => {
+                end_word(s, key);
+                return false;
+            }
+        },
+        None => String::new(),
+    };
+    let seq = layout::cycle_sequence(&engine.layouts, Some(&current_id));
+    let Some(pos) = seq.iter().position(|l| l.id == target.id) else {
+        end_word(s, key);
+        return false;
+    };
+    tracing::debug!(
+        "auto: replace {} chars, layout {} -> {}, margin {}, dictionary {}, decided in {elapsed:?}",
+        s.buffer.shown_len(),
+        current_id,
+        target.id,
+        replace.margin,
+        replace.dictionary
+    );
+    let plan = auto::Plan {
+        hwnd,
+        backspaces: s.buffer.shown_len(),
+        text: format!("{}{separator}", replace.text),
+        enter: key.is_none(),
+        target_hkl: target.hkl,
+        key_delay_ms: s.config.troubleshooting.key_delay_ms,
+        sound: s.config.sounds.enabled.then(|| s.config.sounds.on_convert.clone()),
+    };
+    // from now on the buffer is the replaced word; the hotkey continues the cycle from this layout
+    match key {
+        Some(k) => s.buffer.after_auto_replacement(replace.text.chars().count(), vec![k], seq, pos),
+        None => s.buffer.clear(),
+    }
+    s.buffer.set_start_hkl(target.hkl);
+    s.prev = Some(Prev { layout_id: target.id.clone(), at: Instant::now(), hwnd });
+    s.swallowed_vk = Some(u32::from(vk.0));
+    auto::start(plan);
+    true
 }
 
 /// Runs an action in the main thread. Returns true if the tray menu has to be refreshed.
@@ -416,6 +618,8 @@ fn convert_word() {
             },
             |k, l| key_to_char(l.hkl, k.scancode, k.shift, k.caps),
         )?;
+        // the window gets the new layout on purpose: that is not a "change layout" key
+        s.buffer.set_start_hkl(replacement.target.hkl);
         Some((replacement, s.config.clone()))
     })
     .flatten();

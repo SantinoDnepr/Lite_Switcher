@@ -1,5 +1,6 @@
 #![windows_subsystem = "windows"]
 
+mod auto;
 mod clip;
 mod engine;
 mod hook;
@@ -24,7 +25,7 @@ use lite_switcher_core::{autostart, config::Config, i18n::Translator};
 fn refresh_tray(tray: &tray::Tray, tr: &Translator) {
     let mode = hook::current_mode();
     tray.refresh(mode);
-    tray.set_hint(tr, mode.is_auto() && !engine::loaded().has_packs_for(mode));
+    tray.set_hint(tr, mode.is_auto() && !engine::current().loaded.has_packs_for(mode));
 }
 
 const CONFIG_POLL_MS: u32 = 1000;
@@ -118,6 +119,8 @@ fn main() {
                         }
                     }
                 }
+            } else if msg.message == hook::WM_AUTO_REPLACE {
+                auto::run();
             } else if msg.message == hook::WM_PACKS_LOADED {
                 if let Some(t) = &tray {
                     refresh_tray(t, &translator);

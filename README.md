@@ -33,6 +33,18 @@ a language, copy `Language\English.ini`, translate the values, set `[language] c
 put the file into the folder - it shows up in the list. A test checks that all the files have the
 same keys, so every new text has to be added to all of them.
 
+## Automatic switching
+
+In the `Auto literary` mode the program watches the word you type and, when you end it with a space,
+Enter or an unambiguous punctuation key, checks whether it was typed in the wrong layout (for example
+`ghbdtn` instead of `привет`). If it is clearly a word of another installed language, the word is
+replaced and the layout of the window is switched; the key that ended the word is typed again after
+it. The `Pause` hotkey right after that continues the cycle of layouts. Nothing happens if a key from
+Troubleshooting was pressed while the word was typed (Backspace, arrows, Delete, layout change), for
+abbreviations in capitals, words with digits, ignored applications and words that are fine in the
+current layout. The data are the packs in `LiteraryLanguages` (English, Russian, Ukrainian, built
+from frequency lists with `dictgen`, see `NOTICE`).
+
 ## Language packs
 
 The automatic modes use language packs: `LiteraryLanguages\<code>\` (ordinary languages) and

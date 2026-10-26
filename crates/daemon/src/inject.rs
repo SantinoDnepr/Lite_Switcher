@@ -13,7 +13,7 @@ use windows::Win32::System::Threading::{
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     GetAsyncKeyState, GetKeyboardLayout, SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT,
     KEYBD_EVENT_FLAGS, KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP, KEYEVENTF_UNICODE, VIRTUAL_KEY, VK_BACK,
-    VK_CONTROL, VK_LEFT, VK_LWIN, VK_MENU, VK_RWIN, VK_SHIFT,
+    VK_CONTROL, VK_LEFT, VK_LWIN, VK_MENU, VK_RETURN, VK_RWIN, VK_SHIFT,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     GetForegroundWindow, GetGUIThreadInfo, GetWindowThreadProcessId, PostMessageW, GUITHREADINFO,
@@ -81,6 +81,38 @@ fn key_input(vk: VIRTUAL_KEY, scan: u16, flags: KEYBD_EVENT_FLAGS) -> INPUT {
             ki: KEYBDINPUT { wVk: vk, wScan: scan, dwFlags: flags, time: 0, dwExtraInfo: MARKER },
         },
     }
+}
+
+/// A key event that the hook does not ignore: it is replayed as if the user had pressed the key.
+fn raw_key_input(vk: VIRTUAL_KEY, scan: u16, flags: KEYBD_EVENT_FLAGS) -> INPUT {
+    INPUT {
+        r#type: INPUT_KEYBOARD,
+        Anonymous: INPUT_0 { ki: KEYBDINPUT { wVk: vk, wScan: scan, dwFlags: flags, time: 0, dwExtraInfo: 0 } },
+    }
+}
+
+/// Presses Enter (the program's own event: the hook ignores it).
+pub fn send_enter() {
+    send(&[key_input(VK_RETURN, 0, KEYBD_EVENT_FLAGS(0)), key_input(VK_RETURN, 0, KEYEVENTF_KEYUP)]);
+}
+
+/// Replays the keys that were held back while a word was being replaced. They are real keys again:
+/// the hook sees them and tracks them like the keys of the user.
+pub fn replay_keys(keys: &[crate::auto::HeldKey]) {
+    let inputs: Vec<INPUT> = keys
+        .iter()
+        .map(|k| {
+            let mut flags = KEYBD_EVENT_FLAGS(0);
+            if k.up {
+                flags |= KEYEVENTF_KEYUP;
+            }
+            if k.extended {
+                flags |= KEYEVENTF_EXTENDEDKEY;
+            }
+            raw_key_input(VIRTUAL_KEY(k.vk), k.scan, flags)
+        })
+        .collect();
+    send(&inputs);
 }
 
 fn send(inputs: &[INPUT]) {

@@ -73,6 +73,11 @@ impl WordBuffer {
         self.start_hkl
     }
 
+    /// The layout of the window changed on purpose (by the program itself): not a "change layout" key.
+    pub fn set_start_hkl(&mut self, hkl: isize) {
+        self.start_hkl = Some(hkl);
+    }
+
     /// The word starts over in another layout (the user changed it and that is allowed).
     pub fn restart_in(&mut self, hkl: isize) {
         let keep = self.taint;
