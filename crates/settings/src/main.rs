@@ -110,9 +110,11 @@ struct App {
     installed: Vec<layout::Layout>,
     /// The check boxes of the literary packs, in the order of `packs.literary`.
     literary_checked: Vec<bool>,
-    /// The horizontal scroll of the row of tabs, and whether the tabs do not fit in the window.
-    tab_scroll: f32,
+    /// Whether the tabs do not fit in the window, the tab that the `<` / `>` buttons have reached,
+    /// and whether the row still has to scroll to it.
     tabs_overflow: bool,
+    tab_pivot: usize,
+    scroll_to_pivot: bool,
 }
 
 fn daemon_exe() -> Option<PathBuf> {
@@ -141,8 +143,9 @@ impl App {
             tr,
             languages: i18n::available(),
             title_dirty: false,
-            tab_scroll: 0.0,
             tabs_overflow: false,
+            tab_pivot: 0,
+            scroll_to_pivot: false,
             packs: Discovered::default(),
             installed: Vec::new(),
             literary_checked: Vec::new(),
@@ -542,40 +545,47 @@ impl App {
     }
 }
 
-/// How far the buttons at the ends of the row of tabs scroll it.
-const TAB_SCROLL_STEP: f32 = 120.0;
+const TABS: [(Tab, &str); 6] = [
+    (Tab::Common, "tabs.common"),
+    (Tab::Literary, "tabs.literary"),
+    (Tab::Programming, "tabs.programming"),
+    (Tab::Hotkeys, "tabs.hotkeys"),
+    (Tab::Troubleshooting, "tabs.troubleshooting"),
+    (Tab::Sounds, "tabs.sounds"),
+];
 
 impl App {
     /// The row of tabs. When the window is too narrow for all of them it scrolls: with the mouse wheel
-    /// (over the row), by dragging, and with the `<` and `>` buttons at its ends.
+    /// (over the row), by dragging, and with the `<` and `>` buttons at its ends, which bring the
+    /// previous or the next tab into view.
     fn tab_row(&mut self, ui: &mut egui::Ui) {
         let overflow = self.tabs_overflow;
         ui.horizontal(|ui| {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if overflow && ui.button(">").clicked() {
-                    self.tab_scroll += TAB_SCROLL_STEP;
+                if overflow && ui.add_enabled(self.tab_pivot + 1 < TABS.len(), egui::Button::new(">")).clicked() {
+                    self.tab_pivot += 1;
+                    self.scroll_to_pivot = true;
                 }
                 ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                    if overflow && ui.button("<").clicked() {
-                        self.tab_scroll = (self.tab_scroll - TAB_SCROLL_STEP).max(0.0);
+                    if overflow && ui.add_enabled(self.tab_pivot > 0, egui::Button::new("<")).clicked() {
+                        self.tab_pivot -= 1;
+                        self.scroll_to_pivot = true;
                     }
                     let out = egui::ScrollArea::horizontal()
                         .id_salt("tabs")
                         .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden)
-                        .horizontal_scroll_offset(self.tab_scroll)
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
-                                ui.selectable_value(&mut self.tab, Tab::Common, self.tr.t("tabs.common"));
-                                ui.selectable_value(&mut self.tab, Tab::Literary, self.tr.t("tabs.literary"));
-                                ui.selectable_value(&mut self.tab, Tab::Programming, self.tr.t("tabs.programming"));
-                                ui.selectable_value(&mut self.tab, Tab::Hotkeys, self.tr.t("tabs.hotkeys"));
-                                ui.selectable_value(&mut self.tab, Tab::Troubleshooting, self.tr.t("tabs.troubleshooting"));
-                                ui.selectable_value(&mut self.tab, Tab::Sounds, self.tr.t("tabs.sounds"));
+                                for (index, (tab, key)) in TABS.iter().enumerate() {
+                                    let response = ui.selectable_value(&mut self.tab, *tab, self.tr.t(key));
+                                    if self.scroll_to_pivot && index == self.tab_pivot {
+                                        response.scroll_to_me(Some(egui::Align::Center));
+                                    }
+                                }
                             });
                         });
-                    let max = (out.content_size.x - out.inner_rect.width()).max(0.0);
-                    self.tab_scroll = out.state.unclamped_offset().x.min(max);
-                    self.tabs_overflow = max > 0.5;
+                    self.scroll_to_pivot = false;
+                    self.tabs_overflow = out.content_size.x > out.inner_rect.width() + 0.5;
                 });
             });
         });

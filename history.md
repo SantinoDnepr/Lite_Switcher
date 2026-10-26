@@ -2,6 +2,13 @@
 
 Versions and changes, newest first. Every change to the project is recorded here.
 
+## 0.9.4 - 2026-10-26
+
+### Fixed
+- The `<` and `>` buttons of the row of tabs no longer make the row jump back, and the last tab can be reached:
+  the buttons bring the previous or the next tab into view (instead of setting a scroll offset that the
+  scroll area clamped and animated back).
+
 ## 0.9.3 - 2026-10-26
 
 ### Changed
