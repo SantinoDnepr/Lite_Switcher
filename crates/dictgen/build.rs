@@ -5,7 +5,8 @@ fn main() {
         return;
     }
     let mut res = winresource::WindowsResource::new();
-    res.set("FileDescription", "Lite Switcher - dictionary generator for language packs")
+    res.set_icon("../../icons/lite-switcher.ico")
+        .set("FileDescription", "Lite Switcher - dictionary generator for language packs")
         .set("ProductName", "Lite Switcher")
         .set("InternalName", "dictgen")
         .set("OriginalFilename", "dictgen.exe")

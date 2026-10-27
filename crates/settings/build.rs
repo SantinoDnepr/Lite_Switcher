@@ -5,7 +5,8 @@ fn main() {
         return;
     }
     let mut res = winresource::WindowsResource::new();
-    res.set("FileDescription", "Lite Switcher - settings")
+    res.set_icon("../../icons/lite-switcher.ico")
+        .set("FileDescription", "Lite Switcher - settings")
         .set("ProductName", "Lite Switcher")
         .set("InternalName", "lite-switcher-settings")
         .set("OriginalFilename", "lite-switcher-settings.exe")

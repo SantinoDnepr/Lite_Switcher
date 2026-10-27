@@ -635,6 +635,12 @@ impl eframe::App for App {
     }
 }
 
+/// The icon of the title bar and of the taskbar button.
+fn window_icon() -> std::sync::Arc<egui::IconData> {
+    let icon = lite_switcher_core::icon::window();
+    std::sync::Arc::new(egui::IconData { rgba: icon.data, width: icon.width, height: icon.height })
+}
+
 fn main() -> eframe::Result {
     if std::env::args().any(|a| a == "--about") {
         return about::run();
@@ -649,7 +655,10 @@ fn main() -> eframe::Result {
     };
 
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([520.0, 480.0]).with_min_inner_size([420.0, 360.0]),
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([520.0, 480.0])
+            .with_min_inner_size([420.0, 360.0])
+            .with_icon(window_icon()),
         ..Default::default()
     };
     let app = App::new();

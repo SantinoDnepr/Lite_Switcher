@@ -11,26 +11,10 @@ use lite_switcher_core::i18n::Translator;
 
 use crate::hook::{post_action, post_quit, Action};
 
-/// A round icon with the letter "L".
+/// The icon of the program (the `icons` folder), built into the executable.
 fn make_icon() -> Icon {
-    const N: u32 = 32;
-    let (r, g, b) = (45, 127, 249);
-    let mut rgba = Vec::with_capacity((N * N * 4) as usize);
-    for y in 0..N {
-        for x in 0..N {
-            let (dx, dy) = (x as f32 - 15.5, y as f32 - 15.5);
-            let inside = dx * dx + dy * dy <= 15.0 * 15.0;
-            let letter = ((10..14).contains(&x) && (8..24).contains(&y))
-                || ((10..22).contains(&x) && (20..24).contains(&y));
-            let px = match (inside, letter) {
-                (true, true) => [255, 255, 255, 255],
-                (true, false) => [r, g, b, 255],
-                _ => [0, 0, 0, 0],
-            };
-            rgba.extend_from_slice(&px);
-        }
-    }
-    Icon::from_rgba(rgba, N, N).expect("valid icon data")
+    let icon = lite_switcher_core::icon::tray();
+    Icon::from_rgba(icon.data, icon.width, icon.height).expect("valid icon data")
 }
 
 fn settings_exe() -> Option<PathBuf> {

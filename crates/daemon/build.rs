@@ -5,7 +5,8 @@ fn main() {
         return;
     }
     let mut res = winresource::WindowsResource::new();
-    res.set("FileDescription", "Lite Switcher - keyboard layout switcher (background daemon)")
+    res.set_icon("../../icons/lite-switcher.ico")
+        .set("FileDescription", "Lite Switcher - keyboard layout switcher (background daemon)")
         .set("ProductName", "Lite Switcher")
         .set("InternalName", "lite-switcher")
         .set("OriginalFilename", "lite-switcher.exe")

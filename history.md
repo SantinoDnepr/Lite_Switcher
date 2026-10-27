@@ -2,6 +2,20 @@
 
 Versions and changes, newest first. Every change to the project is recorded here.
 
+## 0.11.0 - 2026-10-27
+
+### Added
+- The icon of the program: `icons/` has the source picture, PNG files (16, 32, 64, 256, 512 px) and the multi-size
+  `lite-switcher.ico`, made by `tools/icons/make-icons.py` (rounded corners, cropped to a square).
+- The icon is used everywhere: the three executables carry the `.ico` (file icon in Explorer and the taskbar), the
+  tray icon, the title bar and taskbar icon of the settings and About windows, and the picture in the About window.
+  The PNG files are built into the executables (`lite_switcher_core::icon`), nothing is read from disk.
+
+### Changed
+- The help pages have no elements of the page generator any more (credit line with links, update notice, Reply,
+  Remark and Copy source buttons); the theme and mode switches stay and are translated for Russian and Ukrainian.
+  `tools/help/clean-help.py` does this after the pages are made with the skill.
+
 ## 0.10.0 - 2026-10-27
 
 ### Added
