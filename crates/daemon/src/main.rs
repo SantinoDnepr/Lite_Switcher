@@ -3,6 +3,7 @@
 mod auto;
 mod clip;
 mod engine;
+mod help;
 mod hook;
 mod inject;
 mod selection;

@@ -23,7 +23,7 @@ New-Item -ItemType Directory -Force $dist | Out-Null
 foreach ($exe in 'lite-switcher.exe', 'lite-switcher-settings.exe', 'dictgen.exe') {
     Copy-Item "target\release\$exe" $dist
 }
-Copy-Item -Recurse Language, LiteraryLanguages $dist
+Copy-Item -Recurse Language, Help, LiteraryLanguages $dist
 if ($WithProgramming) {
     Copy-Item -Recurse ProgrammingLanguages $dist
     Get-ChildItem (Join-Path $dist 'ProgrammingLanguages') -Directory | ForEach-Object {

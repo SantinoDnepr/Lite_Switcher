@@ -16,9 +16,9 @@ variant of the same keys, and so on, back to the original. The layouts are taken
 | `Alt+Pause` | invert the case of the selected text |
 | *(not assigned)* | switch between `manual` and the last automatic mode |
 
-The tray menu has the "Mode" submenu (Auto literary / Auto programming / Manual; the automatic modes
-are being built, until their language packs exist they work as manual) and the items "Settings..."
-and "Exit". The mode is stored in `[common] mode`.
+The tray menu has the "Mode" submenu (Auto literary / Auto programming / Manual), "Settings...",
+"Help" (opens the page of the `Help` folder in the language of the program: `Help_en.html`,
+`Help_ru.html`, `Help_uk.html`), "About..." (a small window with the version and licences) and "Exit". The mode is stored in `[common] mode`.
 
 In Troubleshooting there are seven check boxes "Do not switch the keyboard layout if any keys have
 been pressed" (Backspace, arrows, Delete, Change layout): the automatic switching skips a word if a
@@ -49,7 +49,7 @@ In the `Auto programming` mode the same happens with the tokens of the selected 
 (1C: keywords, directives, `#Область`, `&НаСервере`, platform names). Only a dictionary is used, case
 does not matter, and a token that is also an ordinary word of the layout you are in is left alone
 unless it is a known token of the language typed in the other layout. Hybrids such as `ЕстьNull`
-keep their layout. The data are in `ProgrammingLanguagesc`.
+keep their layout. The data are in `ProgrammingLanguages\1c`.
 
 In the programming mode the dictionary of 1C is not in the repository (it is built from private code
 and from the names of the platform). Build it on your machine, see `docs/adding-a-language.md`

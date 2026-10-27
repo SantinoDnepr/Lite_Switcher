@@ -2,6 +2,24 @@
 
 Versions and changes, newest first. Every change to the project is recorded here.
 
+## 0.10.0 - 2026-10-27
+
+### Added
+- Tray menu items **Help** and **About...** (texts in the three language files: `tray.help`, `tray.about`,
+  section `[about]`, `buttons.close`).
+- **About...** starts `lite-switcher-settings.exe --about`: a small window in the centre of the screen with the icon,
+  the version (from `Cargo.toml`), the description, the copyright and the licences. It is a separate process, so the
+  keyboard hook of the daemon is never blocked.
+- **Help** opens `Help\Help_<language code>.html` in the browser, by the **Language** setting (English if there is no
+  page for the language). The `Help` folder has three self-contained pages (English, Russian, Ukrainian): quick start,
+  hotkeys, modes, how the automatic switching works, tray menu, every settings tab, language packs, the config file,
+  limits and a troubleshooting table. They were made with the `answer-me-with-html` skill from Markdown drafts.
+- Tests: the page choice (language, English fallback, no path tricks) and a page for every language of the
+  `Language` folder. `tools/release.ps1` copies `Help`.
+
+### Fixed
+- README: the broken path of the 1C pack.
+
 ## 0.9.6 - 2026-10-27
 
 ### Added

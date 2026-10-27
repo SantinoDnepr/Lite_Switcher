@@ -63,6 +63,8 @@ pub enum Action {
     SetManual,
     SetAutoLiterary,
     SetAutoProgramming,
+    /// Tray menu: open the help page in the language of the program.
+    ShowHelp,
 }
 
 impl Action {
@@ -75,6 +77,7 @@ impl Action {
             Action::SetManual,
             Action::SetAutoLiterary,
             Action::SetAutoProgramming,
+            Action::ShowHelp,
         ]
         .into_iter()
         .find(|a| *a as usize == value)
@@ -95,7 +98,7 @@ impl Action {
             Action::ConvertSelection => hotkeys.convert_selection,
             Action::InvertCase => hotkeys.invert_case,
             Action::ToggleAutoswitch => hotkeys.toggle_autoswitch,
-            Action::SetManual | Action::SetAutoLiterary | Action::SetAutoProgramming => None,
+            Action::SetManual | Action::SetAutoLiterary | Action::SetAutoProgramming | Action::ShowHelp => None,
         }
     }
 }
@@ -602,8 +605,22 @@ pub fn handle_action(action: Action) -> bool {
         Action::SetManual => return set_mode(Mode::Manual),
         Action::SetAutoLiterary => return set_mode(Mode::AutoLiterary),
         Action::SetAutoProgramming => return set_mode(Mode::AutoProgramming),
+        Action::ShowHelp => show_help(),
     }
     false
+}
+
+/// Opens `Help\Help_<language>.html` (English if there is no page for the language) in the browser.
+fn show_help() {
+    let Some(code) = with_state(|s| s.config.common.language.clone()) else { return };
+    match crate::help::find_page(&code) {
+        Some(page) => {
+            if let Err(e) = std::process::Command::new("explorer").arg(&page).spawn() {
+                tracing::warn!("cannot open {}: {e}", page.display());
+            }
+        }
+        None => tracing::warn!("the Help folder with the page for '{code}' was not found next to the program"),
+    }
 }
 
 /// The toggle hotkey: `manual` <-> the last automatic mode.

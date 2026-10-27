@@ -55,6 +55,8 @@ pub struct Tray {
     /// Check items of the submenu, in the order of `MENU_MODES`.
     mode_items: Vec<CheckMenuItem>,
     settings: MenuItem,
+    help: MenuItem,
+    about: MenuItem,
     exit: MenuItem,
 }
 
@@ -68,9 +70,19 @@ impl Tray {
             mode_menu.append(item)?;
         }
         let settings = MenuItem::new(tr.t("tray.settings"), true, None);
+        let help = MenuItem::new(tr.t("tray.help"), true, None);
+        let about = MenuItem::new(tr.t("tray.about"), true, None);
         let exit = MenuItem::new(tr.t("tray.exit"), true, None);
         let menu = Menu::new();
-        menu.append_items(&[&mode_menu, &settings, &PredefinedMenuItem::separator(), &exit])?;
+        menu.append_items(&[
+            &mode_menu,
+            &settings,
+            &PredefinedMenuItem::separator(),
+            &help,
+            &about,
+            &PredefinedMenuItem::separator(),
+            &exit,
+        ])?;
 
         let icon = TrayIconBuilder::new()
             .with_menu(Box::new(menu))
@@ -81,7 +93,8 @@ impl Tray {
         // The handler must be Send + Sync, so it only touches ids and posts messages to the main thread.
         let mode_ids: Vec<(MenuId, Mode)> =
             mode_items.iter().zip(MENU_MODES).map(|(item, m)| (item.id().clone(), m)).collect();
-        let (settings_id, exit_id) = (settings.id().clone(), exit.id().clone());
+        let (settings_id, help_id, about_id, exit_id) =
+            (settings.id().clone(), help.id().clone(), about.id().clone(), exit.id().clone());
         MenuEvent::set_event_handler(Some(move |event: MenuEvent| {
             if let Some((_, mode)) = mode_ids.iter().find(|(id, _)| *id == event.id) {
                 post_action(Action::set_mode(*mode));
@@ -91,11 +104,20 @@ impl Tray {
                         tracing::warn!("cannot start {}: {e}", path.display());
                     }
                 }
+            } else if event.id == help_id {
+                // the language of the help is the language of the program: the main thread knows it
+                post_action(Action::ShowHelp);
+            } else if event.id == about_id {
+                if let Some(path) = settings_exe() {
+                    if let Err(e) = Command::new(&path).arg("--about").spawn() {
+                        tracing::warn!("cannot start {}: {e}", path.display());
+                    }
+                }
             } else if event.id == exit_id {
                 post_quit();
             }
         }));
-        Ok(Tray { icon, mode_menu, mode_items, settings, exit })
+        Ok(Tray { icon, mode_menu, mode_items, settings, help, about, exit })
     }
 
     pub fn set_visible(&self, visible: bool) {
@@ -109,6 +131,8 @@ impl Tray {
             item.set_text(tr.t(mode_text_key(mode)));
         }
         self.settings.set_text(tr.t("tray.settings"));
+        self.help.set_text(tr.t("tray.help"));
+        self.about.set_text(tr.t("tray.about"));
         self.exit.set_text(tr.t("tray.exit"));
         let _ = self.icon.set_tooltip(Some(tr.t("tray.tooltip")));
     }

@@ -1,5 +1,7 @@
 #![windows_subsystem = "windows"]
 
+mod about;
+
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -634,6 +636,9 @@ impl eframe::App for App {
 }
 
 fn main() -> eframe::Result {
+    if std::env::args().any(|a| a == "--about") {
+        return about::run();
+    }
     // Single instance.
     let _mutex = unsafe {
         let handle = CreateMutexW(None, true, w!("Local\\LiteSwitcher.Settings"));
