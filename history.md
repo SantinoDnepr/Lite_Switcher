@@ -2,6 +2,20 @@
 
 Versions and changes, newest first. Every change to the project is recorded here.
 
+## 0.12.0 - 2026-10-27
+
+### Changed
+- New icon: the old one is removed, the new one is made from the logo "blue-yellow LS" (`icons/source.png`, a picture
+  whose transparent background is a drawn checkerboard). `tools/icons/make-icons.py` cuts the logo out by colour,
+  makes a clean antialiased edge (colours are premultiplied when the picture is made smaller, so there is no fringe)
+  and writes the PNG files (16, 32, 64, 256, 512 px) and `lite-switcher.ico` (16 to 256 px). From 128 px the icon is
+  the picture with a soft shadow; up to 64 px it is redrawn flat with a thicker, continuous outline, so it stays
+  readable in the tray and in Explorer.
+- The `sounds` folder (`switch1.wav`, `switch2.wav`) is part of the distribution (`tools/release.ps1`).
+- A relative path of a sound file in **Sounds** (for example `sounds\switch1.wav`) is looked for next to the program
+  (and in the folders above it, like the other data folders). Before, it was relative to the working directory, which
+  is not the folder of the program when it starts with Windows.
+
 ## 0.11.0 - 2026-10-27
 
 ### Added

@@ -237,17 +237,46 @@ pub fn switch_layout(hwnd: HWND, hkl: isize) {
 }
 
 /// Plays the given .wav file, or the system default sound when the path is empty.
+/// A relative path of a sound file is looked for next to the program (and in the folders above it, as the
+/// other data folders are), because the working directory of a program in autostart is not its folder.
+fn resolve_sound(wav: &str) -> String {
+    let path = std::path::Path::new(wav);
+    if path.is_absolute() {
+        return wav.to_string();
+    }
+    let found = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|dir| dir.ancestors().take(5).map(|d| d.join(path)).find(|p| p.is_file())))
+        .flatten();
+    found.map_or_else(|| wav.to_string(), |p| p.display().to_string())
+}
+
 pub fn play_sound(wav: &str) {
     unsafe {
         if wav.is_empty() {
             let _ = PlaySoundW(w!("SystemAsterisk"), None, SND_ALIAS | SND_ASYNC);
         } else {
-            let wide: Vec<u16> = wav.encode_utf16().chain(std::iter::once(0)).collect();
+            let wide: Vec<u16> = resolve_sound(wav).encode_utf16().chain(std::iter::once(0)).collect();
             let _ = PlaySoundW(
                 windows::core::PCWSTR(wide.as_ptr()),
                 None,
                 SND_FILENAME | SND_ASYNC | SND_NODEFAULT,
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sound_paths_are_looked_for_next_to_the_program() {
+        // an absolute path and an unknown file stay as they are
+        assert_eq!(resolve_sound(r"C:\Windows\Media\tada.wav"), r"C:\Windows\Media\tada.wav");
+        assert_eq!(resolve_sound(r"no-such-folder\no-such.wav"), r"no-such-folder\no-such.wav");
+        // the test program runs in target\debug\deps: the `sounds` folder of the repository is above it
+        let found = resolve_sound(r"sounds\switch1.wav");
+        assert!(std::path::Path::new(&found).is_absolute() && found.ends_with("switch1.wav"), "{found}");
     }
 }

@@ -97,6 +97,12 @@ A release folder and zip (programs, `Language`, the packs, licences, docs) is ma
 `pwsh -File tools\release.ps1` into `dist\`; add `-WithProgramming` to include the programming packs
 you have built (the local lexicon is never included).
 
+## Sounds
+
+The `sounds` folder has two short sounds (`switch1.wav`, `switch2.wav`). In Settings, Sounds, give the path of a file,
+for example `sounds\switch1.wav`: a relative path is looked for next to the program. An empty path plays the
+system sound.
+
 ## Config
 
 `%APPDATA%\LiteSwitcher\config.ini` is created on the first start. Sections: `[common]`, `[hotkeys]`,
