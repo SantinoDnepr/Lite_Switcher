@@ -9,3 +9,6 @@ eframe = { version = "0.37.0", default-features = false, features = ["default_fo
 lite-switcher-core = { path = "../core" }
 lite-switcher-lang = { path = "../lang" }
 windows = { version = "0.62.2", features = ["Win32_Foundation", "Win32_UI_Input_KeyboardAndMouse", "Win32_System_Threading", "Win32_Security"] }
+
+[build-dependencies]
+winresource = "0.1"

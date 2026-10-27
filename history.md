@@ -2,6 +2,14 @@
 
 Versions and changes, newest first. Every change to the project is recorded here.
 
+## 0.9.6 - 2026-10-27
+
+### Added
+- The three executables (`lite-switcher.exe`, `lite-switcher-settings.exe`, `dictgen.exe`) carry version
+  information: file description, file and product version (from `Cargo.toml`), product name, internal and
+  original file name, copyright. It fills the "Details" tab of the file properties (build script with the
+  `winresource` crate; needs the resource compiler `rc.exe` of the Windows SDK, without it the build only warns).
+
 ## 0.9.5 - 2026-10-26
 
 Live check of the automatic modes (`tools/e2e/auto-literary.ps1`: 12 scenarios, `auto-programming.ps1`: 8 scenarios,
