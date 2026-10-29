@@ -172,7 +172,21 @@ impl WordBuffer {
         if seq.len() < 2 {
             return None;
         }
-        let next = (pos + 1) % seq.len();
+        let show = |layout: &Layout| -> String {
+            self.keys.iter().chain(&self.trailing).filter_map(|k| render(k, layout)).collect()
+        };
+        let current = show(&seq[pos]);
+        let mut next = (pos + 1) % seq.len();
+        // Punctuation only (`"` is the same in ru and uk): a step that changes nothing in the text is skipped,
+        // the hotkey goes on to the layout where the keys give other characters (`@` in en).
+        if !current.chars().any(char::is_alphanumeric) {
+            for _ in 1..seq.len() {
+                if show(&seq[next]) != current {
+                    break;
+                }
+                next = (next + 1) % seq.len();
+            }
+        }
         let target = seq[next].clone();
         let word: String = self.keys.iter().filter_map(|k| render(k, &target)).collect();
         let tail: String = self.trailing.iter().filter_map(|k| render(k, &target)).collect();
@@ -235,6 +249,20 @@ mod tests {
         assert_eq!(r3.target.id, "ru-RU");
         let r4 = buf.next_replacement(|| unreachable!(), render).unwrap();
         assert_eq!(r4.target.id, "uk-UA");
+    }
+
+    #[test]
+    fn a_punctuation_key_alone_skips_the_layout_that_shows_the_same_character() {
+        let mut buf = WordBuffer::default();
+        buf.push(key(0x35)); // typed in ru: '.', in uk it is '.' too, in en '/'
+        let all = layouts();
+        let r = buf.next_replacement(|| cycle_sequence(&all, Some("ru-RU")), render).unwrap();
+        assert_eq!((r.target.id.as_str(), r.text.as_str(), r.backspaces), ("en-US", "/", 1));
+        // the next steps go on from there: ru (the original), then uk is skipped again
+        let r = buf.next_replacement(|| unreachable!(), render).unwrap();
+        assert_eq!((r.target.id.as_str(), r.text.as_str()), ("ru-RU", "."));
+        let r = buf.next_replacement(|| unreachable!(), render).unwrap();
+        assert_eq!((r.target.id.as_str(), r.text.as_str()), ("en-US", "/"));
     }
 
     #[test]

@@ -7,5 +7,6 @@ pub mod icon;
 pub mod i18n;
 pub mod layout;
 pub mod paths;
+pub mod sound;
 pub mod text;
 pub mod word;

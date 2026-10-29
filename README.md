@@ -99,9 +99,10 @@ you have built (the local lexicon is never included).
 
 ## Sounds
 
-The `sounds` folder has two short sounds (`switch1.wav`, `switch2.wav`). In Settings, Sounds, give the path of a file,
-for example `sounds\switch1.wav`: a relative path is looked for next to the program. An empty path plays the
-system sound.
+The `sounds` folder has two short sounds (`switch1.wav`, `switch2.wav`). In Settings, Sounds, type the name of a
+file from that folder (`switch2.wav`) or a full path, or press **Browse...** (a file from the `sounds` folder is
+stored by its name, a file from another folder with its full path); **Play** plays the chosen sound. An empty field
+plays the system sound.
 
 ## Config
 

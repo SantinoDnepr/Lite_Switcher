@@ -2,6 +2,38 @@
 
 Versions and changes, newest first. Every change to the project is recorded here.
 
+## 0.13.0 - 2026-10-29
+
+### Fixed
+- Settings, Sounds: Ctrl+X, Ctrl+C and Ctrl+V did not work in the text fields (the `clipboard` feature of eframe was
+  not enabled). They work in every field now.
+- Settings, tabs: the `<` and `>` buttons took no notice of a click on a tab (they counted from a hidden counter).
+  Now they look at the real position of the tabs: `>` brings the first tab that is cut off or hidden on the right,
+  `<` the last one on the left, whatever the row was scrolled with and whichever tab was clicked.
+- Automatic literary mode: a form of a dictionary word that is not itself in the dictionary is recognized
+  (`учитывает` typed in the Ukrainian layout as `учитівает`, the dictionary has `учитывать`). A word of 8 letters or
+  more counts as a form of a dictionary word if a word starts with it minus its last 3 letters. Such a candidate
+  needs the margin of a dictionary word, it never beats a current word that is a form of a dictionary word itself.
+  Measured with `dictgen eval` (FrequencyWords): false switches on rare words 0.187% -> 0.193% (limit 0.2%), on
+  frequent words 0.000%; rare Russian words typed in the Ukrainian layout restored 6% -> 14%, Ukrainian words typed in
+  Russian 29% -> 42%.
+- Automatic literary mode: a word that is in the dictionaries of two layouts with different text (`формі` uk,
+  `формы` ru) is converted when the previous word was in the other language (before, it was always kept).
+- A punctuation key typed alone (`"` in the Russian or Ukrainian layout) was not remembered in the automatic modes, so
+  the hotkey did nothing. It is a one-key word for the hotkey now; the next word does not join it.
+- The hotkey on a word made only of punctuation skips the layout where the text would not change (`"` in ru is `"` in
+  uk): ru `"` -> en `@` at once.
+
+### Changed
+- Settings, Sounds: the file field takes either a bare name, which is looked for in the `sounds` folder of the
+  program (default; `switch2.wav`), or a full path. The **Browse...** button opens a file dialog in the `sounds`
+  folder; a file from there is stored by its name only, a file from another folder with its full path. The **Play**
+  button plays the sound of the field. An old setting such as `sounds\switch1.wav` still works.
+- The search and playing of the sound moved to `lite-switcher-core` (`sound.rs`); the daemon and the settings use it.
+- Texts in the three language files (`sounds.browse`, `sounds.play`, `sounds.dialog_filter`, `sounds.dialog_title`,
+  new `sounds.path`), the Help pages and README.
+- `tools/e2e/lone-key.ps1`: live check of a lone punctuation key and the hotkey (any mode).
+
 ## 0.12.0 - 2026-10-27
 
 ### Changed

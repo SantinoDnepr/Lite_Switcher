@@ -112,11 +112,12 @@ struct App {
     installed: Vec<layout::Layout>,
     /// The check boxes of the literary packs, in the order of `packs.literary`.
     literary_checked: Vec<bool>,
-    /// Whether the tabs do not fit in the window, the tab that the `<` / `>` buttons have reached,
-    /// and whether the row still has to scroll to it.
+    /// Whether the tabs do not fit in the window, where the tabs and the visible part of the row were
+    /// on the last frame, and the tab that the row still has to scroll to (after a `<` / `>` click).
     tabs_overflow: bool,
-    tab_pivot: usize,
-    scroll_to_pivot: bool,
+    tab_rects: Vec<egui::Rect>,
+    tab_view: egui::Rect,
+    scroll_to_tab: Option<usize>,
 }
 
 fn daemon_exe() -> Option<PathBuf> {
@@ -146,8 +147,9 @@ impl App {
             languages: i18n::available(),
             title_dirty: false,
             tabs_overflow: false,
-            tab_pivot: 0,
-            scroll_to_pivot: false,
+            tab_rects: Vec::new(),
+            tab_view: egui::Rect::NOTHING,
+            scroll_to_tab: None,
             packs: Discovered::default(),
             installed: Vec::new(),
             literary_checked: Vec::new(),
@@ -543,7 +545,39 @@ impl App {
         ui.heading(self.tr.t("sounds.heading"));
         ui.checkbox(&mut self.cfg.sounds.enabled, self.tr.t("sounds.enabled"));
         ui.label(self.tr.t("sounds.path"));
-        ui.add(egui::TextEdit::singleline(&mut self.cfg.sounds.on_convert).desired_width(f32::INFINITY));
+        ui.horizontal(|ui| {
+            let browse = self.tr.t("sounds.browse").to_string();
+            let play = self.tr.t("sounds.play").to_string();
+            let buttons = ui.spacing().button_padding.x * 4.0
+                + ui.spacing().item_spacing.x * 2.0
+                + [&browse, &play]
+                    .iter()
+                    .map(|text| ui.painter().layout_no_wrap((*text).clone(), egui::TextStyle::Button.resolve(ui.style()), egui::Color32::WHITE).size().x)
+                    .sum::<f32>();
+            let width = (ui.available_width() - buttons).max(80.0);
+            ui.add(egui::TextEdit::singleline(&mut self.cfg.sounds.on_convert).desired_width(width));
+            if ui.button(&browse).clicked() {
+                self.choose_sound();
+            }
+            if ui.button(&play).clicked() {
+                lite_switcher_core::sound::play(self.cfg.sounds.on_convert.trim());
+            }
+        });
+    }
+
+    /// The file dialog for the sound. It starts in the `sounds` folder; a file from there is stored by its
+    /// name only, a file from another folder with its full path.
+    fn choose_sound(&mut self) {
+        let mut dialog = rfd::FileDialog::new()
+            .add_filter(self.tr.t("sounds.dialog_filter"), &["wav"])
+            .set_title(self.tr.t("sounds.dialog_title"));
+        let current = lite_switcher_core::sound::resolve(self.cfg.sounds.on_convert.trim());
+        if let Some(dir) = current.parent().filter(|d| d.is_dir()).map(PathBuf::from).or_else(lite_switcher_core::sound::sounds_dir) {
+            dialog = dialog.set_directory(dir);
+        }
+        if let Some(file) = dialog.pick_file() {
+            self.cfg.sounds.on_convert = lite_switcher_core::sound::setting_for(&file);
+        }
     }
 }
 
@@ -559,20 +593,25 @@ const TABS: [(Tab, &str); 6] = [
 impl App {
     /// The row of tabs. When the window is too narrow for all of them it scrolls: with the mouse wheel
     /// (over the row), by dragging, and with the `<` and `>` buttons at its ends, which bring the
-    /// previous or the next tab into view.
+    /// nearest tab that is hidden (or cut) on that side into view. Where the tabs are is taken from the
+    /// row itself, so it does not matter how the row was moved or which tab was clicked.
     fn tab_row(&mut self, ui: &mut egui::Ui) {
         let overflow = self.tabs_overflow;
+        // the first tab cut off or hidden on the right, the last one on the left
+        let view = self.tab_view;
+        let hidden_right = self.tab_rects.iter().position(|r| r.max.x > view.max.x + 1.0);
+        let hidden_left = self.tab_rects.iter().rposition(|r| r.min.x < view.min.x - 1.0);
         ui.horizontal(|ui| {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if overflow && ui.add_enabled(self.tab_pivot + 1 < TABS.len(), egui::Button::new(">")).clicked() {
-                    self.tab_pivot += 1;
-                    self.scroll_to_pivot = true;
+                if overflow && ui.add_enabled(hidden_right.is_some(), egui::Button::new(">")).clicked() {
+                    self.scroll_to_tab = hidden_right;
                 }
                 ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                    if overflow && ui.add_enabled(self.tab_pivot > 0, egui::Button::new("<")).clicked() {
-                        self.tab_pivot -= 1;
-                        self.scroll_to_pivot = true;
+                    if overflow && ui.add_enabled(hidden_left.is_some(), egui::Button::new("<")).clicked() {
+                        self.scroll_to_tab = hidden_left;
                     }
+                    let target = self.scroll_to_tab.take();
+                    let mut rects = Vec::with_capacity(TABS.len());
                     let out = egui::ScrollArea::horizontal()
                         .id_salt("tabs")
                         .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden)
@@ -580,13 +619,15 @@ impl App {
                             ui.horizontal(|ui| {
                                 for (index, (tab, key)) in TABS.iter().enumerate() {
                                     let response = ui.selectable_value(&mut self.tab, *tab, self.tr.t(key));
-                                    if self.scroll_to_pivot && index == self.tab_pivot {
+                                    if target == Some(index) {
                                         response.scroll_to_me(Some(egui::Align::Center));
                                     }
+                                    rects.push(response.rect);
                                 }
                             });
                         });
-                    self.scroll_to_pivot = false;
+                    self.tab_rects = rects;
+                    self.tab_view = out.inner_rect;
                     self.tabs_overflow = out.content_size.x > out.inner_rect.width() + 0.5;
                 });
             });

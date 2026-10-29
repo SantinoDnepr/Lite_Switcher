@@ -119,6 +119,13 @@ impl Words {
         self.map.contains_key(key.as_bytes())
     }
 
+    /// Is there a word that starts with `prefix`?
+    pub fn has_prefix(&self, prefix: &str) -> bool {
+        use fst::automaton::{Automaton, Str};
+        use fst::{IntoStreamer, Streamer};
+        self.map.search(Str::new(prefix).starts_with()).into_stream().next().is_some()
+    }
+
     pub fn len(&self) -> usize {
         self.map.len()
     }

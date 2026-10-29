@@ -79,8 +79,15 @@ pub struct LiteraryDetector {
     packs: Vec<Arc<LoadedPack>>,
 }
 
+/// A word of at least this many letters is "a form of a dictionary word" when the dictionary has a word that
+/// starts with the word minus its last `STEM_TAIL` letters (an ending: учитывает ~ учитывать).
+const STEM_MIN_WORD: usize = 8;
+const STEM_TAIL: usize = 3;
+
 struct Evaluated {
     in_dictionary: bool,
+    /// The word is not in the dictionary, but looks like a form of a dictionary word.
+    stem_match: bool,
     in_exceptions: bool,
     all_caps: bool,
     /// Cost of the whole word scaled to the length of the typed keys; `None` if it is not a word.
@@ -137,8 +144,17 @@ impl LiteraryDetector {
         } else {
             None
         };
+        let in_dictionary = pack.words.contains(&lower);
+        let stem_match = !in_dictionary && is_word && {
+            let len = lower.chars().count();
+            len >= STEM_MIN_WORD && {
+                let stem: String = lower.chars().take(len - STEM_TAIL).collect();
+                pack.words.has_prefix(&stem)
+            }
+        };
         Some(Evaluated {
-            in_dictionary: pack.words.contains(&lower),
+            in_dictionary,
+            stem_match,
             in_exceptions: pack.exceptions.contains(&lower),
             all_caps,
             cost,
@@ -162,6 +178,8 @@ impl LiteraryDetector {
 
         // 1. the word in the current layout
         let mut current_cost: Option<u32> = None;
+        let mut current_in_dictionary = false;
+        let mut current_stem = false;
         for (lead, trail) in (0..=lead_max).flat_map(|l| (0..=trail_max).map(move |t| (l, t))) {
             let Some(e) = self.evaluate(table, keys, ctx.current, lead, trail) else { continue };
             if e.all_caps {
@@ -171,8 +189,10 @@ impl LiteraryDetector {
                 return Verdict::Keep(KeepReason::Exception);
             }
             if e.in_dictionary {
-                return Verdict::Keep(KeepReason::Dictionary);
+                current_in_dictionary = true;
+                continue;
             }
+            current_stem |= e.stem_match;
             if let Some(c) = e.cost {
                 current_cost = Some(current_cost.map_or(c, |m| m.min(c)));
             }
@@ -186,6 +206,8 @@ impl LiteraryDetector {
             strip: usize,
             cost: u32,
             dictionary: bool,
+            /// The word is a form of a dictionary word, not a dictionary word itself.
+            stem: bool,
         }
         // a dictionary word beats a word that only looks like one; then the cheaper wins
         let better = |new: &Best, old: &Best| (!new.dictionary, new.cost) < (!old.dictionary, old.cost);
@@ -203,10 +225,25 @@ impl LiteraryDetector {
                 }
                 let Some(cost) = e.cost else { continue };
                 let cost = cost.saturating_sub(bonus(layout));
-                let candidate = Best { layout, strip: lead + trail, cost, dictionary: e.in_dictionary || e.in_exceptions };
+                // a form of a dictionary word does not beat a word that is a form of a dictionary word as it is
+                if e.stem_match && current_stem {
+                    continue;
+                }
+                let dictionary = e.in_dictionary || e.in_exceptions || e.stem_match;
+                let candidate = Best { layout, strip: lead + trail, cost, dictionary, stem: e.stem_match };
                 if best.as_ref().is_none_or(|b| better(&candidate, b)) {
                     best = Some(candidate);
                 }
+            }
+        }
+        // A word of the dictionary of the current layout stays, unless it is also a dictionary word in the
+        // language of the previous word and the text differs (формі uk ~ формы ru after Russian words).
+        if current_in_dictionary {
+            let in_context = best.as_ref().is_some_and(|b| {
+                b.dictionary && !b.stem && ctx.previous == Some(b.layout) && ctx.previous != Some(ctx.current)
+            });
+            if !in_context {
+                return Verdict::Keep(KeepReason::Dictionary);
             }
         }
         let Some(best) = best else { return Verdict::Keep(KeepReason::NoCandidate) };
@@ -314,6 +351,39 @@ pub(crate) mod tests {
     fn decide(d: &LiteraryDetector, t: &RenderTable, text: &str, typed_in: &str, current: usize) -> Verdict {
         let keys = keys_for(text, typed_in);
         d.decide(t, &Context { keys: &keys, current, previous: None })
+    }
+
+    fn twin_detector() -> (LiteraryDetector, RenderTable) {
+        let ru: Vec<&str> = RU_WORDS.iter().copied().chain(["формы", "учитывать"]).collect();
+        let uk: Vec<&str> = UK_WORDS.iter().copied().chain(["форми", "формі"]).collect();
+        let loaded = Loaded { literary: vec![pack("en", EN_WORDS, &[]), pack("ru", &ru, &[]), pack("uk", &uk, &[])], programming: None };
+        let table = table(&["en", "ru", "uk"]);
+        (LiteraryDetector::new(&loaded, table.layout_ids()), table)
+    }
+
+    #[test]
+    fn a_form_of_a_dictionary_word_is_restored_from_another_layout() {
+        let (d, t) = twin_detector();
+        // "учитывает" is not in the dictionary, "учитывать" is; typed in the Ukrainian layout it is "учитівает"
+        match decide(&d, &t, "учитывает", "ru", UK) {
+            Verdict::Replace(r) => assert_eq!((r.layout, r.text.as_str()), (RU, "учитывает")),
+            other => panic!("{other:?}"),
+        }
+        // and the same form typed in the right layout stays
+        assert!(matches!(decide(&d, &t, "учитывает", "ru", RU), Verdict::Keep(_)));
+    }
+
+    #[test]
+    fn a_word_that_is_in_both_dictionaries_follows_the_language_of_the_previous_word() {
+        let (d, t) = twin_detector();
+        let keys = keys_for("формі", "uk"); // the keys of "формы" in the Russian layout
+        let after = |previous| d.decide(&t, &Context { keys: &keys, current: UK, previous });
+        assert_eq!(after(None), Verdict::Keep(KeepReason::Dictionary));
+        assert_eq!(after(Some(UK)), Verdict::Keep(KeepReason::Dictionary));
+        match after(Some(RU)) {
+            Verdict::Replace(r) => assert_eq!((r.layout, r.text.as_str()), (RU, "формы")),
+            other => panic!("{other:?}"),
+        }
     }
 
     #[test]

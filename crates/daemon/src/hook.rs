@@ -122,6 +122,9 @@ struct State {
     last_auto: Mode,
     /// The language of the previous word (for ru/uk ties).
     prev: Option<Prev>,
+    /// The buffer holds one punctuation key that was typed alone (`"`): it stays convertible with the
+    /// hotkey, but the next word does not join it.
+    lone_separator: bool,
 }
 
 thread_local! {
@@ -158,6 +161,7 @@ pub fn set_config(config: Config) {
                 *slot = Some(State {
                     last_auto: if config.common.mode.is_auto() { config.common.mode } else { Mode::AutoLiterary },
                     prev: None,
+                    lone_separator: false,
                     config,
                     layouts,
                     buffer: WordBuffer::default(),
@@ -435,6 +439,10 @@ fn track_key(s: &mut State, vk: VIRTUAL_KEY, kb: &KBDLLHOOKSTRUCT) -> bool {
         Mode::Manual => false,
     };
 
+    let lone = std::mem::take(&mut s.lone_separator);
+    if lone && auto && s.buffer.keys().len() == 1 && s.buffer.trailing().is_empty() {
+        s.buffer.clear();
+    }
     if vk == VK_RETURN {
         if auto {
             return on_trigger(s, &engine, None, vk, hkl, hwnd.0 as isize);
@@ -471,7 +479,16 @@ fn track_key(s: &mut State, vk: VIRTUAL_KEY, kb: &KBDLLHOOKSTRUCT) -> bool {
             s.buffer.push_in(key, hkl);
             false
         }
-        KeyClass::Separator if !is_digit_key(&key) => on_trigger(s, &engine, Some(key), vk, hkl, hwnd.0 as isize),
+        KeyClass::Separator if !is_digit_key(&key) => {
+            let alone = s.buffer.is_empty() && vk != VK_SPACE;
+            let swallowed = on_trigger(s, &engine, Some(key), vk, hkl, hwnd.0 as isize);
+            if alone && !swallowed {
+                // a punctuation key typed on its own is a "word" for the hotkey (ru `"` is en `@`)
+                s.buffer.push_in(key, hkl);
+                s.lone_separator = true;
+            }
+            swallowed
+        }
         // letters, keys that are letters in some layouts, digits
         _ => {
             note_layout(s, hkl);
