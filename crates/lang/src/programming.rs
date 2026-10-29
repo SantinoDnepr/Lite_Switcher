@@ -289,7 +289,7 @@ pub(crate) mod tests {
 
     pub fn pack(extra: &[&str]) -> Arc<LoadedPack> {
         let text = PROGRAMMING.replace("latin_segments = Null, XML", "latin_segments = Null, XML, JSON");
-        let manifest = Manifest::parse(&text, Some("1c")).unwrap();
+        let manifest = Manifest::parse(&text, Some("bsl")).unwrap();
         let mut words: Vec<(String, u32)> = [
             "процедура", "procedure", "конецпроцедуры", "функция", "если", "тогда", "иначе", "конецесли", "возврат",
             "новый", "запрос", "выполнить", "#область", "#region", "&наклиенте", "&atclient", "&насервере",

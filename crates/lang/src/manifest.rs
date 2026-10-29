@@ -108,7 +108,7 @@ impl Default for ProgrammingParams {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Manifest {
     pub kind: Kind,
-    /// Identifier of the pack = the name of its folder (`ru`, `1c`).
+    /// Identifier of the pack = the name of its folder (`ru`, `bsl`).
     pub code: String,
     /// The name shown in the settings.
     pub name: String,
@@ -306,7 +306,7 @@ fold_yo = true
     pub const PROGRAMMING: &str = "\
 [pack]
 kind = programming
-code = 1c
+code = bsl
 name = 1C:Enterprise
 format = 1
 version = 1
@@ -340,7 +340,7 @@ latin_segments = Null, XML
 
     #[test]
     fn parses_a_programming_pack() {
-        let m = Manifest::parse(PROGRAMMING, Some("1C")).unwrap();
+        let m = Manifest::parse(PROGRAMMING, Some("bsl")).unwrap();
         assert_eq!(m.kind, Kind::Programming);
         assert_eq!(m.layout_require, ["ru", "en"]);
         assert_eq!(m.layout_roles, [("ru".to_string(), "native".to_string()), ("en".to_string(), "latin".to_string())]);
@@ -361,7 +361,7 @@ latin_segments = Null, XML
         assert!(bad(&LITERARY.replace("sources = FrequencyWords-2018:ru\n", "")).contains("sources"));
         assert!(bad(&LITERARY.replace("match = ru", "")).contains("match"));
         assert!(bad(&LITERARY.replace("ngram = ngram3.bin\n", "")).contains("ngram"));
-        assert!(Manifest::parse(&PROGRAMMING.replace("require = ru, en", ""), Some("1c")).unwrap_err().0.contains("require"));
+        assert!(Manifest::parse(&PROGRAMMING.replace("require = ru, en", ""), Some("bsl")).unwrap_err().0.contains("require"));
     }
 
     #[test]

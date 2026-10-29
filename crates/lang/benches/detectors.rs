@@ -1,5 +1,5 @@
 //! Timing of the decisions (NFR-1, NFR-2, NFR-3). The packs are taken from the folders of the
-//! repository; the programming benchmarks are skipped when the 1C pack has not been built.
+//! repository; the programming benchmarks are skipped when the bsl pack has not been built.
 //!
 //! `cargo bench -p lite-switcher-lang`
 
@@ -58,8 +58,8 @@ fn literary(c: &mut Criterion) {
 fn programming(c: &mut Criterion) {
     let dir = Path::new(ROOT).join("ProgrammingLanguages");
     let (infos, _) = discover_dir(&dir, Kind::Programming);
-    let Some(pack) = infos.iter().find(|i| i.manifest.code == "1c").and_then(|i| load_pack(i).ok()) else {
-        eprintln!("the 1c pack is not built: skipped");
+    let Some(pack) = infos.iter().find(|i| i.manifest.code == "bsl").and_then(|i| load_pack(i).ok()) else {
+        eprintln!("the bsl pack is not built: skipped");
         return;
     };
     let render = table(&["en", "ru"]);

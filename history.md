@@ -2,6 +2,17 @@
 
 Versions and changes, newest first. Every change to the project is recorded here.
 
+## 0.14.0 - 2026-10-29
+
+### Changed
+- The pack of 1C is called **`bsl`** (the name of the language, as `ru` or `en` are for the literary packs): the folder
+  `ProgrammingLanguages\1c` is now `ProgrammingLanguages\bsl`, `code = bsl` in its `pack.ini`, the default
+  pack of `dictgen eval-programming`, the tests, the benchmark, `tools/e2e/auto-programming.ps1`, `.gitignore`, README,
+  NOTICE and the documents. The display name stays "1C:Enterprise".
+- A config of an older version with `selected = 1c` is read as `bsl` (it is written as `bsl` on the next save).
+- **To move an installed copy:** rename `ProgrammingLanguages\1c` to `ProgrammingLanguages\bsl` (the local
+  lexicon `local` goes with it) and set `code = bsl` in `pack.ini` (a pack that is built again gets it itself).
+
 ## 0.13.0 - 2026-10-29
 
 ### Fixed

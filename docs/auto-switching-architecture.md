@@ -86,7 +86,7 @@
 ### 2.4 Политика публичного среза (для GitHub)
 
 - В репозиторий и релиз идёт **публичный слой**: seed + имена из MCP + токены из `.bsl`, которые есть в seed/MCP **или** встречаются в **не менее K независимых группах** (по умолчанию K = 3; группы строятся по доле общих файлов ≥ 50 %). При 12–16 группах и десятке крупных проектов публичный срез получится заметно меньше 63 тыс. токенов: размер фиксируется при сборке, а не обещается заранее.
-- **Локальный лексикон** (идентификаторы из своих баз) строится `dictgen` на машине пользователя, лежит в `ProgrammingLanguages\1c\local\`, в `.gitignore`, **не коммитится никогда**; подключается вторым слоем с меньшим приоритетом.
+- **Локальный лексикон** (идентификаторы из своих баз) строится `dictgen` на машине пользователя, лежит в `ProgrammingLanguages\bsl\local\`, в `.gitignore`, **не коммитится никогда**; подключается вторым слоем с меньшим приоритетом.
 - Лицензии литературных данных: `docs/data-sources.md`.
 
 ## 3. Общая схема
@@ -165,7 +165,7 @@ mode = manual
 enabled = auto
 
 [programming_language]
-; id выбранного языка (один), например 1c; пусто = не выбран
+; id выбранного языка (один), например bsl; пусто = не выбран
 selected =
 
 [troubleshooting]
@@ -194,7 +194,7 @@ no_switch_if_change_layout = true
     uk\  ...
     en\  ...
   ProgrammingLanguages\
-    1c\  pack.ini  words.fst  [local\words.fst]
+    bsl\  pack.ini  words.fst  [local\words.fst]
     rust\ ...   (позже)
 ```
 
@@ -365,8 +365,8 @@ latin_segments = Null,XML,JSON,XDTO,HTML,SMS,HTTP
 | Команда | Вход | Выход |
 |---|---|---|
 | `literary --lang ru --freq <список> [--min-count N] --out LiteraryLanguages\ru` | частотный список (FrequencyWords и др.) | `words.fst`, `ngram3.bin`, `pack.ini` |
-| `programming --lang 1c --seed seed.txt --mcp <дамп> --bsl <папка> [--min-groups 3] --out ...` | seed, дамп MCP, выгрузки `.bsl` | `words.fst`, `pack.ini` |
-| `programming --lang 1c --bsl <папка> --local --out ...\local` | только свои `.bsl` | локальный лексикон |
+| `programming --lang bsl --seed seed.txt --mcp <дамп> --bsl <папка> [--min-groups 3] --out ...` | seed, дамп MCP, выгрузки `.bsl` | `words.fst`, `pack.ini` |
+| `programming --lang bsl --bsl <папка> --local --out ...\local` | только свои `.bsl` | локальный лексикон |
 | `mcp-dump --config .mcp.json --out dump.json` | сервер из `.mcp.json` | перечень типов, методов, свойств (только имена) |
 | `eval --pack <папка> --testset <файл>` | размеченные слова | полнота, ложные срабатывания, путаница ru/uk, время |
 

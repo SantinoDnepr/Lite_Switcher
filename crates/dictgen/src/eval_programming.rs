@@ -237,7 +237,7 @@ fn eval_prose(env: &Env, spec: &str) -> Result<bool, String> {
 
 pub fn run(args: &Args) -> Result<(), String> {
     let packs = PathBuf::from(args.required("packs")?);
-    let code = args.get("code").filter(|c| !c.is_empty()).unwrap_or("1c");
+    let code = args.get("code").filter(|c| !c.is_empty()).unwrap_or("bsl");
     let (infos, issues) = discover_dir(&packs, Kind::Programming);
     for issue in &issues {
         eprintln!("skipped {}: {}", issue.dir.display(), issue.message);

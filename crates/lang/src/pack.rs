@@ -291,7 +291,7 @@ mod tests {
         fn add_programming(&self, code: &str) -> PathBuf {
             let dir = self.programming().join(code);
             fs::create_dir_all(&dir).unwrap();
-            fs::write(dir.join(MANIFEST_FILE), PROGRAMMING.replace("code = 1c", &format!("code = {code}"))).unwrap();
+            fs::write(dir.join(MANIFEST_FILE), PROGRAMMING.replace("code = bsl", &format!("code = {code}"))).unwrap();
             fs::write(dir.join("words.fst"), Words::build([("процедура".to_string(), flags_keyword())]).unwrap()).unwrap();
             dir
         }
@@ -316,7 +316,7 @@ mod tests {
         let sb = Sandbox::new();
         sb.add_literary("ru", "Russian");
         sb.add_literary("uk", "Ukrainian");
-        sb.add_programming("1c");
+        sb.add_programming("bsl");
         // broken: code differs from the folder, a literary pack among the programming ones, no manifest
         let bad = sb.literary().join("xx");
         fs::create_dir_all(&bad).unwrap();
@@ -329,7 +329,7 @@ mod tests {
         let found = sb.discover();
         let codes = |v: &[PackInfo]| v.iter().map(|p| p.manifest.code.clone()).collect::<Vec<_>>();
         assert_eq!(codes(&found.literary), ["ru", "uk"]);
-        assert_eq!(codes(&found.programming), ["1c"]);
+        assert_eq!(codes(&found.programming), ["bsl"]);
         assert_eq!(found.issues.len(), 2, "{:?}", found.issues);
         assert!(found.issues.iter().any(|i| i.message.contains("folder name")));
         assert!(found.issues.iter().any(|i| i.message.contains("literary but it is in")));
@@ -375,13 +375,13 @@ mod tests {
     #[test]
     fn programming_pack_needs_selection_and_all_layouts() {
         let sb = Sandbox::new();
-        sb.add_programming("1c");
+        sb.add_programming("bsl");
         let packs = sb.discover().programming;
         let mut config = Config::default();
         let both = [layout("en-US"), layout("ru-RU")];
 
         assert!(!evaluate(&packs, &both, &config)[0].active, "not selected");
-        config.programming_language.selected = "1C".into();
+        config.programming_language.selected = "bsl".into();
         assert!(evaluate(&packs, &both, &config)[0].active);
         let only_en = evaluate(&packs, &[layout("en-US")], &config);
         assert!(only_en[0].enabled && !only_en[0].active);
@@ -393,9 +393,9 @@ mod tests {
         let sb = Sandbox::new();
         sb.add_literary("ru", "Russian");
         sb.add_literary("de", "German");
-        sb.add_programming("1c");
+        sb.add_programming("bsl");
         let mut config = Config::default();
-        config.programming_language.selected = "1c".into();
+        config.programming_language.selected = "bsl".into();
         let found = sb.discover();
         let installed = [layout("en-US"), layout("ru-RU")];
         let mut statuses = evaluate(&found.literary, &installed, &config);
@@ -419,10 +419,10 @@ mod tests {
     #[test]
     fn local_lexicon_is_a_layer_of_a_programming_pack() {
         let sb = Sandbox::new();
-        let dir = sb.add_programming("1c");
+        let dir = sb.add_programming("bsl");
         let installed = [layout("en-US"), layout("ru-RU")];
         let mut config = lite_switcher_core::config::Config::default();
-        config.programming_language.selected = "1c".into();
+        config.programming_language.selected = "bsl".into();
         let load_it = || {
             let found = sb.discover();
             let (loaded, issues) = load(&evaluate(&found.programming, &installed, &config));

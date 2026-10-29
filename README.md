@@ -49,7 +49,7 @@ In the `Auto programming` mode the same happens with the tokens of the selected 
 (1C: keywords, directives, `#Область`, `&НаСервере`, platform names). Only a dictionary is used, case
 does not matter, and a token that is also an ordinary word of the layout you are in is left alone
 unless it is a known token of the language typed in the other layout. Hybrids such as `ЕстьNull`
-keep their layout. The data are in `ProgrammingLanguages\1c`.
+keep their layout. The data are in `ProgrammingLanguages\bsl`.
 
 In the programming mode the dictionary of 1C is not in the repository (it is built from private code
 and from the names of the platform). Build it on your machine, see `docs/adding-a-language.md`

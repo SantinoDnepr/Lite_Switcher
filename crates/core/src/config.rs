@@ -123,7 +123,7 @@ impl LiteraryLanguage {
 /// The programming language used by the `auto_programming` mode (exactly one).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ProgrammingLanguage {
-    /// Pack code (e.g. `1c`); empty = nothing selected.
+    /// Pack code (e.g. `bsl`); empty = nothing selected.
     pub selected: String,
 }
 
@@ -293,7 +293,9 @@ impl Config {
                 if v.trim().eq_ignore_ascii_case("auto") { None } else { Some(parse_list(v)) };
         }
         if let Some(v) = get("programming_language", "selected") {
-            cfg.programming_language.selected = v.trim().to_string();
+            // the pack of 1C was called `1c` before 0.14.0
+            let id = v.trim();
+            cfg.programming_language.selected = if id.eq_ignore_ascii_case("1c") { "bsl".to_string() } else { id.to_string() };
         }
         if let Some(v) = get("sounds", "enabled").and_then(parse_bool) {
             cfg.sounds.enabled = v;
@@ -359,7 +361,7 @@ no_switch_if_change_layout = {ns_change_layout}
 enabled = {literary}
 
 [programming_language]
-; code of the selected programming language pack (only one), e.g. 1c; empty = none
+; code of the selected programming language pack (only one), e.g. bsl; empty = none
 selected = {programming}
 
 [sounds]
@@ -441,7 +443,7 @@ mod tests {
         cfg.troubleshooting.no_switch.backspace = false;
         cfg.troubleshooting.no_switch.change_layout = false;
         cfg.literary_language.enabled = Some(vec!["ru".into(), "en".into()]);
-        cfg.programming_language.selected = "1c".into();
+        cfg.programming_language.selected = "bsl".into();
         cfg.hotkeys.convert_word = "Ctrl+F9".parse().unwrap();
         cfg.hotkeys.convert_selection = None;
         cfg.hotkeys.invert_case = Some("Alt+F8".parse().unwrap());
@@ -507,9 +509,14 @@ invert_case = Nope
         assert_eq!(cfg.literary_language.enabled, None);
         assert!(cfg.literary_language.is_enabled("de"));
         assert_eq!(cfg.programming_language.selected, "");
-        let cfg = Config::parse("[literary_language]\nenabled = ru, UK\n[programming_language]\nselected = 1c\n").unwrap();
+        let cfg = Config::parse("[literary_language]\nenabled = ru, UK\n[programming_language]\nselected = bsl\n").unwrap();
         assert!(cfg.literary_language.is_enabled("uk") && !cfg.literary_language.is_enabled("en"));
-        assert_eq!(cfg.programming_language.selected, "1c");
+        assert_eq!(cfg.programming_language.selected, "bsl");
+        // a config of an older version
+        let old = Config::parse("[programming_language]
+selected = 1C
+").unwrap();
+        assert_eq!(old.programming_language.selected, "bsl");
         let none = Config::parse("[literary_language]\nenabled =\n").unwrap();
         assert!(!none.literary_language.is_enabled("ru"), "an empty list means no languages");
     }

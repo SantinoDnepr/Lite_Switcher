@@ -20,7 +20,7 @@ public class K5 {
 $ad = Join-Path $env:TEMP "ls-e2e-prog"
 Remove-Item $ad -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory "$ad\LiteSwitcher" | Out-Null
-"[common]`nmode = auto_programming`n[programming_language]`nselected = 1c`n[hotkeys]`nconvert_word = ScrollLock`nconvert_selection =`ninvert_case =`n[troubleshooting]`nlog_enabled = true`nlog_level = debug`n" | Set-Content "$ad\LiteSwitcher\config.ini"
+"[common]`nmode = auto_programming`n[programming_language]`nselected = bsl`n[hotkeys]`nconvert_word = ScrollLock`nconvert_selection =`ninvert_case =`n[troubleshooting]`nlog_enabled = true`nlog_level = debug`n" | Set-Content "$ad\LiteSwitcher\config.ini"
 $env:APPDATA = $ad; $env:LITE_SWITCHER_TEST_INSTANCE = "1"
 $daemon = Start-Process $Exe -PassThru
 $form = New-Object Windows.Forms.Form

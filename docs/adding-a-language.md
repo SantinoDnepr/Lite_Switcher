@@ -87,7 +87,7 @@ standard library. The program recognises a token that was typed in the wrong lay
 
 The layouts in `--require` have to be installed, otherwise the pack is not active. `--roles` names the
 role of each layout (`native` for the layout of the language of the keywords, `latin` for the Latin
-one); `ProgrammingLanguages\1c\pack.ini` is a complete example. The detector so far is tested with 1C;
+one); `ProgrammingLanguages\bsl\pack.ini` is a complete example. The detector so far is tested with 1C;
 a language whose tokens are Latin only (Rust, C++) is a new case, so measure it with `eval-programming`.
 
 ## The local lexicon (your own identifiers)
@@ -95,7 +95,7 @@ a language whose tokens are Latin only (Rust, C++) is a new case, so measure it 
 The names that your own code uses are not in a published pack. Build them on your machine:
 
 ```
-dictgen programming --local --bsl D:\MyCode --out ProgrammingLanguages\1c\local --min-count 3
+dictgen programming --local --bsl D:\MyCode --out ProgrammingLanguages\bsl\local --min-count 3
 ```
 
 The file `local\words.fst` is read together with the pack (the words of the pack first, then yours). It is
