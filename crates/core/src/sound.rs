@@ -65,7 +65,12 @@ mod tests {
     fn a_bare_name_is_looked_for_in_the_sounds_folder() {
         // the test program runs in target\debug\deps: the `sounds` folder of the repository is above it
         let found = resolve("switch1.wav");
-        assert!(found.is_absolute() && found.ends_with(r"sounds\switch1.wav"), "{found:?}");
+        assert!(
+            found.is_absolute() && found.ends_with(r"sounds\switch1.wav"),
+            "{found:?}, exe {:?}, sounds {:?}",
+            std::env::current_exe(),
+            sounds_dir()
+        );
         // an old setting with the folder in it still works
         let old = resolve(r"sounds\switch1.wav");
         assert!(old.is_absolute() && old.ends_with("switch1.wav"), "{old:?}");
