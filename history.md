@@ -2,6 +2,17 @@
 
 Versions and changes, newest first. Every change to the project is recorded here.
 
+## 0.14.1 - 2026-11-23
+
+### Added
+- GitHub Actions, **Release** (`.github/workflows/release.yml`): a pushed tag `v<version>` builds the programs on a
+  Windows runner, runs the tests, makes the zip with `tools/release.ps1` and publishes it on the Releases page with
+  the notes of that version from this file. The tag must match the version in `Cargo.toml`. Run by hand, the
+  workflow only keeps the zip as an artifact of the run. The programming packs are not in the zip (private data).
+- GitHub Actions, **Security** (`.github/workflows/security.yml`): CodeQL analysis of the Rust code and of the
+  workflows, and `cargo audit` of the dependencies (RustSec advisories), on every push to `main`, on pull requests
+  and once a week. The results are on the Security tab.
+- Dependabot (`.github/dependabot.yml`): weekly pull requests that update the crates and the actions.
 ## 0.14.0 - 2026-10-29
 
 ### Changed

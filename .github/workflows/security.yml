@@ -1,0 +1,57 @@
+# Security checks; the results are on the Security tab of the repository.
+#
+# - CodeQL: static analysis of the Rust code and of these workflows (code scanning alerts);
+# - cargo audit: the dependencies in Cargo.lock against the RustSec advisory database.
+#
+# Runs on every push and pull request to main and once a week (new advisories appear without a
+# change of the code).
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '30 3 * * 1'
+  workflow_dispatch:
+
+jobs:
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: windows-latest
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [rust, actions]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          queries: security-and-quality
+
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:${{ matrix.language }}
+
+  audit:
+    name: cargo audit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+
+      - name: Audit Cargo.lock
+        run: cargo audit

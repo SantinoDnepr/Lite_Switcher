@@ -1,0 +1,16 @@
+# Dependabot: once a week, pull requests that update the Rust crates and the GitHub Actions
+# (security updates come as soon as an advisory is published, if enabled on the Security tab).
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      crates:
+        patterns: ['*']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

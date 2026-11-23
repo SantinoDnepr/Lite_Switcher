@@ -97,6 +97,10 @@ A release folder and zip (programs, `Language`, the packs, licences, docs) is ma
 `pwsh -File tools\release.ps1` into `dist\`; add `-WithProgramming` to include the programming packs
 you have built (the local lexicon is never included).
 
+On GitHub the same zip is built by the **Release** workflow: push a tag `v<version>` that matches `Cargo.toml`
+(`git tag v0.14.1 && git push origin v0.14.1`) and the release with the zip appears on the Releases page.
+The **Security** workflow (CodeQL and `cargo audit`) reports to the Security tab.
+
 ## Sounds
 
 The `sounds` folder has two short sounds (`switch1.wav`, `switch2.wav`). In Settings, Sounds, type the name of a

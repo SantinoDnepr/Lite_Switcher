@@ -1,0 +1,72 @@
+# Builds the release on a Windows runner and publishes it on the Releases page.
+#
+# - a pushed tag v<version> (e.g. v0.14.1): build, test, make the zip with tools/release.ps1
+#   and create the GitHub release with the zip and the notes of that version from history.md;
+# - "Run workflow" by hand: the same build, the zip is only kept as an artifact of the run.
+#
+# The programming packs are private data and are never in the repository, so the zip has an
+# empty ProgrammingLanguages folder (as tools/release.ps1 without -WithProgramming).
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Tests
+        run: cargo test --workspace --release
+
+      - name: Build the release folder and zip
+        shell: pwsh
+        run: |
+          pwsh -File tools/release.ps1
+          $version = (Select-String -Path Cargo.toml -Pattern '^version\s*=\s*"([^"]+)"').Matches[0].Groups[1].Value
+          "VERSION=$version" >> $env:GITHUB_ENV
+
+      - name: The tag matches the version in Cargo.toml
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          if ("${{ github.ref_name }}" -ne "v$env:VERSION") {
+            throw "the tag ${{ github.ref_name }} is not v$env:VERSION (Cargo.toml)"
+          }
+
+      - name: Release notes from history.md
+        shell: pwsh
+        run: |
+          $lines = Get-Content history.md -Encoding utf8
+          $start = ($lines | Select-String -Pattern "^## $([regex]::Escape($env:VERSION))\b").LineNumber
+          $notes = @()
+          if ($start) {
+            for ($i = $start; $i -lt $lines.Count; $i++) {
+              if ($lines[$i] -match '^## ') { break }
+              $notes += $lines[$i]
+            }
+          }
+          ($notes -join "`n").Trim() | Set-Content -Encoding utf8 release-notes.md
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Lite_Switcher-${{ env.VERSION }}
+          path: dist/Lite_Switcher-${{ env.VERSION }}.zip
+
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Lite Switcher ${{ env.VERSION }}
+          body_path: release-notes.md
+          files: dist/Lite_Switcher-${{ env.VERSION }}.zip
