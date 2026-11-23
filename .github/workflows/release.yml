@@ -2,7 +2,8 @@
 #
 # - a pushed tag v<version> (e.g. v0.14.1): build, test, make the zip with tools/release.ps1
 #   and create the GitHub release with the zip and the notes of that version from history.md;
-# - "Run workflow" by hand: the same build, the zip is only kept as an artifact of the run.
+# - a push to main or "Run workflow" by hand: the same build and tests, the zip is only kept as
+#   an artifact of the run.
 #
 # The programming packs are private data and are never in the repository, so the zip has an
 # empty ProgrammingLanguages folder (as tools/release.ps1 without -WithProgramming).
@@ -10,6 +11,7 @@ name: Release
 
 on:
   push:
+    branches: [main]
     tags: ['v*']
   workflow_dispatch:
 
@@ -27,7 +29,15 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Tests
-        run: cargo test --workspace --release
+        shell: pwsh
+        run: |
+          cargo test --workspace --release 2>&1 | Tee-Object -FilePath test.log
+          if ($LASTEXITCODE -ne 0) {
+            # the failed tests as annotations, readable on the run page without the log
+            Select-String -Path test.log -Pattern 'panicked at|^---- |left:|right:|FAILED' |
+              ForEach-Object { "::error title=cargo test::$($_.Line)" }
+            exit 1
+          }
 
       - name: Build the release folder and zip
         shell: pwsh
