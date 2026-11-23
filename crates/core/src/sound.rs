@@ -29,7 +29,7 @@ pub fn resolve(wav: &str) -> PathBuf {
     }
     let beside = std::env::current_exe()
         .ok()
-        .and_then(|exe| exe.parent().and_then(|dir| dir.ancestors().take(5).map(|d| d.join(path)).find(|p| p.is_file())));
+        .and_then(|exe| exe.parent().and_then(|dir| dir.ancestors().take(crate::paths::SEARCH_DEPTH).map(|d| d.join(path)).find(|p| p.is_file())));
     beside.unwrap_or_else(|| path.to_path_buf())
 }
 
@@ -63,7 +63,7 @@ mod tests {
 
     #[test]
     fn a_bare_name_is_looked_for_in_the_sounds_folder() {
-        // the test program runs in target\debug\deps: the `sounds` folder of the repository is above it
+        // the test program runs in target: the `sounds` folder of the repository is above it
         let found = resolve("switch1.wav");
         assert!(
             found.is_absolute() && found.ends_with(r"sounds\switch1.wav"),

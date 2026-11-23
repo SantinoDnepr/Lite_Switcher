@@ -13,6 +13,13 @@ Versions and changes, newest first. Every change to the project is recorded here
   workflows, and `cargo audit` of the dependencies (RustSec advisories), on every push to `main`, on pull requests
   and once a week. The results are on the Security tab.
 - Dependabot (`.github/dependabot.yml`): weekly pull requests that update the crates and the actions.
+
+### Fixed
+- `tokio` 1.54.0 -> 1.54.1 (RUSTSEC-2026-0384, a race in `tokio::time::Interval`; it comes with `rfd` and `winit`)
+  and `rustix` 1.1.5 -> 1.1.6 (RUSTSEC-2026-0486), found by `cargo audit`.
+- The data folders (`Language`, the packs, `sounds`) are looked for up to 8 folders above the program instead of 5:
+  a newer cargo runs the tests from `target\release\build\<crate>\<hash>\out`, and the test of the `sounds` folder
+  failed there.
 ## 0.14.0 - 2026-10-29
 
 ### Changed
