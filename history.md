@@ -2,6 +2,17 @@
 
 Versions and changes, newest first. Every change to the project is recorded here.
 
+## 0.14.2 - 2026-11-23
+
+### Changed
+- Dependencies updated (the Dependabot pull requests #1-#4): `png` 0.17 -> 0.18, `rfd` 0.15 -> 0.18,
+  `criterion` 0.5 -> 0.8 (benchmarks only); in the workflows `actions/checkout` 4 -> 7,
+  `actions/upload-artifact` 4 -> 7, `softprops/action-gh-release` 2 -> 3.
+- The built-in icon is decoded through a `Cursor` (png 0.18 reads from `BufRead + Seek`); the benchmarks use
+  `std::hint::black_box` (the one of criterion is deprecated).
+- 0.14.1 was not published as a release (its tag points at a commit whose test failed on the GitHub runner); this is
+  the first release built by GitHub Actions.
+
 ## 0.14.1 - 2026-11-23
 
 ### Added

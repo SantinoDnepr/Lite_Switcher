@@ -3,10 +3,11 @@
 //!
 //! `cargo bench -p lite-switcher-lang`
 
+use std::hint::black_box;
 use std::path::Path;
 use std::sync::Arc;
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
 use lite_switcher_lang::literary::{Context, LiteraryDetector};
 use lite_switcher_lang::manifest::Kind;
 use lite_switcher_lang::pack::{discover_dir, discover_in, load_pack, Loaded};

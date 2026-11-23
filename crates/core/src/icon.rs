@@ -11,10 +11,12 @@ const TRAY_PNG: &[u8] = include_bytes!("../../../icons/icon-32.png");
 const WINDOW_PNG: &[u8] = include_bytes!("../../../icons/icon-256.png");
 
 fn decode(bytes: &[u8]) -> Rgba {
-    let mut decoder = png::Decoder::new(bytes);
+    // png 0.18 reads from `BufRead + Seek`: a `Cursor` over the built-in bytes
+    let mut decoder = png::Decoder::new(std::io::Cursor::new(bytes));
     decoder.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16);
     let mut reader = decoder.read_info().expect("the built-in icon is a valid PNG");
-    let mut buffer = vec![0; reader.output_buffer_size()];
+    let size = reader.output_buffer_size().expect("the built-in icon has a sane size");
+    let mut buffer = vec![0; size];
     let info = reader.next_frame(&mut buffer).expect("the built-in icon can be decoded");
     buffer.truncate(info.buffer_size());
     let data = match info.color_type {
