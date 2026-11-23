@@ -58,7 +58,7 @@ jobs:
           }
           ($notes -join "`n").Trim() | Set-Content -Encoding utf8 release-notes.md
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: Lite_Switcher-${{ env.VERSION }}
           path: dist/Lite_Switcher-${{ env.VERSION }}.zip
