@@ -34,8 +34,8 @@ jobs:
           cargo test --workspace --release 2>&1 | Tee-Object -FilePath test.log
           if ($LASTEXITCODE -ne 0) {
             # the failed tests as annotations, readable on the run page without the log
-            Select-String -Path test.log -Pattern 'panicked at|^---- |left:|right:|FAILED' |
-              ForEach-Object { "::error title=cargo test::$($_.Line)" }
+            Select-String -Path test.log -Pattern 'panicked at' -Context 0,3 |
+              ForEach-Object { "::error title=cargo test::$($_.Line) $($_.Context.PostContext -join ' | ')" }
             exit 1
           }
 
